@@ -1,6 +1,6 @@
-# REAPER SIM
+# ACT-1 SIM
 
-Internal flight-performance simulation and test platform for the Reaper UAV.
+Internal flight-performance simulation and test platform for the ACT-1 UAV.
 Actprove Defense Technologies.
 
 A carbon-composite, turbojet-powered UAV is modelled from rail launch through
@@ -304,7 +304,7 @@ tests/test_physics.py
 
 ## Assets still to drop in
 
-- `public/models/reaper.glb` - the airframe. Until then the viewport draws a
+- `public/models/act1.glb` - the airframe. Until then the viewport draws a
   labelled placeholder with the configured span and length.
 - `public/brand/actprove.svg` - chevron and wordmark, white on transparent. Until
   then the header draws the chevron inline.

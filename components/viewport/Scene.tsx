@@ -9,7 +9,7 @@ import { indexAt, sampleAt } from "@/lib/playback";
 import { type CameraPreset, useSim } from "@/lib/store";
 import { MachCone } from "./MachCone";
 import { Rail } from "./Rail";
-import { Reaper, useModelAvailable } from "./Reaper";
+import { Act1, useModelAvailable } from "./Act1";
 import { Trail } from "./Trail";
 
 const DEG = Math.PI / 180;
@@ -73,7 +73,7 @@ function Aircraft({ hasModel }: { hasModel: boolean }) {
   return (
     <>
       <group ref={group}>
-        <Reaper lengthM={L} spanM={spec.airframe.span_m} hasModel={hasModel} />
+        <Act1 lengthM={L} spanM={spec.airframe.span_m} hasModel={hasModel} />
         <group ref={cone}>
           <MachCone lengthM={L} machDd={spec.airframe.mach_dd} reducedMotion={reduced} />
         </group>
@@ -235,7 +235,7 @@ export function Scene() {
         </div>
         {hasModel === false && (
           <div className="pointer-events-none absolute bottom-2 left-2 border border-rule bg-void px-2 py-1 text-[10px] text-dim">
-            Placeholder airframe. Drop reaper.glb into /public/models/ for the real geometry.
+            Placeholder airframe. Drop act1.glb into /public/models/ for the real geometry.
           </div>
         )}
         {run && <ViewportHud />}

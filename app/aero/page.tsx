@@ -43,7 +43,7 @@ export default function AeroWindow() {
   return (
     <main className="flex h-dvh w-dvw flex-col overflow-hidden bg-void">
       <header className="flex h-11 shrink-0 items-center gap-3 rule-b bg-panel px-3">
-        <Brand />
+        <Brand product={null} />
         <span className="tracked text-[11px] font-semibold">Aerodynamics</span>
         <span className="num ml-auto text-[11px] text-dim">{clock(t)}</span>
         <span className="num text-[10px] text-dim">

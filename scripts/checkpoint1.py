@@ -15,7 +15,7 @@ t0 = time.perf_counter(); r = simulate(spec); wall = (time.perf_counter() - t0) 
 s, f, p, l, m1 = r.summary, r.fuel, r.resolved.plan, r.launch, r.mach1
 af, eng = spec.airframe, spec.engine
 
-hr("REAPER SIM - STAGE 1 - HEADLESS SOLVER")
+hr("ACT-1 SIM - STAGE 1 - HEADLESS SOLVER")
 print(f"{spec.label} / {spec.config_name}    solve {wall:.0f} ms    {s.n_samples} samples "
       f"at {spec.integration.output_hz:.0f} Hz    dt {spec.integration.dt} s")
 hr("CONFIGURATION")

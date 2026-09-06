@@ -11,7 +11,7 @@ const config: NextConfig = {
   devIndicators: false,
   async rewrites() {
     if (process.env.NODE_ENV !== "development") return [];
-    const port = process.env.REAPER_API_PORT ?? "8787";
+    const port = process.env.ACT1_API_PORT ?? "8787";
     return [{ source: "/api/:path*", destination: `http://127.0.0.1:${port}/api/:path*` }];
   },
 };

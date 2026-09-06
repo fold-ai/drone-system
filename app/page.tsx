@@ -47,7 +47,6 @@ export default function Console() {
 
       <header className="flex h-11 shrink-0 items-center gap-4 rule-b bg-panel px-3">
         <Brand />
-        <span className="tracked text-[11px] font-semibold text-bright">Reaper Sim</span>
         <span className="num text-[11px] text-dim">
           {spec.label} &middot; {spec.config_name}
         </span>
@@ -202,11 +201,14 @@ export default function Console() {
 
 function downloadJson(spec: MissionSpec) {
   const blob = new Blob([JSON.stringify(spec, null, 2)], { type: "application/json" });
-  trigger(blob, `${spec.label.toLowerCase().replace(/\s+/g, "-")}-config.json`);
+  trigger(blob, `act1-${spec.label.toLowerCase().replace(/\s+/g, "-")}-config.json`);
 }
 
 function downloadCsv(label: string, csv: string) {
-  trigger(new Blob([csv], { type: "text/csv" }), `${label.toLowerCase().replace(/\s+/g, "-")}-trajectory.csv`);
+  trigger(
+    new Blob([csv], { type: "text/csv" }),
+    `act1-${label.toLowerCase().replace(/\s+/g, "-")}-trajectory.csv`,
+  );
 }
 
 function trigger(blob: Blob, filename: string) {

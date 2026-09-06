@@ -8,7 +8,7 @@
  */
 import type { Run } from "./playback";
 
-export const CHANNEL = "reaper-sim";
+export const CHANNEL = "act1-sim";
 
 export type Message =
   | { kind: "cursor"; t: number; playing: boolean; speed: number }

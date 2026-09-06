@@ -17,9 +17,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "REAPER SIM",
+  title: "ACT-1 SIM",
   description:
-    "Flight-performance simulation and test platform for the Reaper UAV. Actprove Defense Technologies, internal.",
+    "Flight-performance simulation and test platform for the ACT-1 UAV. Actprove Defense Technologies, internal.",
   robots: { index: false, follow: false },
 };
 

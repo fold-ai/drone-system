@@ -34,7 +34,7 @@ def _run(handler: BaseHTTPRequestHandler, body: dict) -> None:
 
     if q.get("format") == "csv":
         send(handler, 200, to_csv(result.trajectory, cols), "text/csv; charset=utf-8",
-             filename=f"{spec.label.lower().replace(' ', '-')}-trajectory.csv")
+             filename=f"act1-{spec.label.lower().replace(' ', '-')}-trajectory.csv")
         return
 
     payload = to_dict(result)

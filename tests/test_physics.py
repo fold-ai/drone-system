@@ -1,4 +1,4 @@
-"""Validation suite for the REAPER solver.
+"""Validation suite for the ACT-1 solver.
 
 These are not unit tests of the code, they are checks against closed-form answers
 and against the performance the airframe is physically capable of. The last group

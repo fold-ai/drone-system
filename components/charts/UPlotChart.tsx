@@ -47,7 +47,7 @@ const TITLE_H = 13;
 export function UPlotChart({
   spec,
   height,
-  syncKey = "reaper",
+  syncKey = "act1",
   onSeek,
 }: {
   spec: ChartSpec;

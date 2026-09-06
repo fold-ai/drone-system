@@ -76,10 +76,10 @@ class Handler(BaseHTTPRequestHandler):
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--port", type=int, default=int(os.environ.get("REAPER_API_PORT", 8787)))
+    ap.add_argument("--port", type=int, default=int(os.environ.get("ACT1_API_PORT", 8787)))
     args = ap.parse_args()
     srv = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
-    print(f"REAPER solver on http://127.0.0.1:{args.port}  "
+    print(f"ACT-1 solver on http://127.0.0.1:{args.port}  "
           f"(python {sys.version.split()[0]})", flush=True)
     print(f"  routes: {', '.join(sorted(ROUTES))}", flush=True)
     try:

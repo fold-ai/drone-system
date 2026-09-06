@@ -5,7 +5,7 @@ import { useGLTF } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 
-const MODEL_URL = "/models/reaper.glb";
+const MODEL_URL = "/models/act1.glb";
 
 /** True once the airframe model has been confirmed present. */
 export function useModelAvailable(): boolean | null {
@@ -87,11 +87,11 @@ function PlaceholderAirframe({ lengthM, spanM }: { lengthM: number; spanM: numbe
 }
 
 /**
- * The aircraft. Attitude is the solved flight-path angle and heading, with no
- * cosmetic banking added; a bank angle only appears when a commanded turn
- * produces one.
+ * The ACT-1 airframe. Attitude is the solved flight-path angle and heading,
+ * with no cosmetic banking added; a bank angle only appears when a commanded
+ * turn produces one.
  */
-export function Reaper({
+export function Act1({
   lengthM,
   spanM,
   hasModel,

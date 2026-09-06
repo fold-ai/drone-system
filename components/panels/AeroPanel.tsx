@@ -38,7 +38,7 @@ export function AeroPanel({ detached = false }: { detached?: boolean }) {
             onClick={() => {
               const w = window.open(
                 "/aero",
-                "reaper-aero",
+                "act1-aero",
                 "width=520,height=940,menubar=no,toolbar=no,location=no,status=no",
               );
               if (w) setAeroDetached(true);
