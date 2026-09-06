@@ -13,7 +13,9 @@ import { study as fetchStudy, SolverError } from "@/app/api-client";
 import {
   DEFAULT_MISSION_SPEC,
   type MissionSpec,
+  type Planform,
   type PolarResult,
+  type Reconciliation,
   type SensitivityResult,
   type StudyOp,
   type SweepResult,
@@ -34,6 +36,8 @@ interface State {
   polar: PolarResult | null;
   sensitivity: SensitivityResult | null;
   sweep: SweepResult | null;
+  planform: Planform | null;
+  reconciliation: Reconciliation | null;
   jobs: Record<StudyOp, Job>;
 
   /** Operating point broadcast by the console, when a trajectory is loaded. */
@@ -80,6 +84,8 @@ export const useStudy = create<State>((set, get) => ({
   polar: null,
   sensitivity: null,
   sweep: null,
+  planform: null,
+  reconciliation: null,
   jobs: { polar: IDLE, sensitivity: IDLE, sweep: IDLE, planform: IDLE },
   operating: null,
 
@@ -103,6 +109,8 @@ export const useStudy = create<State>((set, get) => ({
         ...(res.polar ? { polar: res.polar } : {}),
         ...(res.sensitivity ? { sensitivity: res.sensitivity } : {}),
         ...(res.sweep ? { sweep: res.sweep } : {}),
+        ...(res.planform ? { planform: res.planform } : {}),
+        ...(res.reconciliation ? { reconciliation: res.reconciliation } : {}),
       });
     } catch (err) {
       const e = err as SolverError;

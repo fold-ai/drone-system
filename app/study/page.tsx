@@ -5,6 +5,7 @@ import { DragBreakdown } from "@/components/study/DragBreakdown";
 import { PolarChart } from "@/components/study/PolarChart";
 import { Sensitivity } from "@/components/study/Sensitivity";
 import { Improvements } from "@/components/study/Improvements";
+import { SectionInspector } from "@/components/study/SectionInspector";
 import { SweepExplorer } from "@/components/study/SweepExplorer";
 import { StudyControls } from "@/components/study/StudyControls";
 import { Brand } from "@/components/ui/Brand";
@@ -90,6 +91,9 @@ export default function Study() {
           </div>
           <div className="rule-t">
             <SweepExplorer />
+          </div>
+          <div className="rule-t">
+            <SectionInspector />
           </div>
         </div>
 
