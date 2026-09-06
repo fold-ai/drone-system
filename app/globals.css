@@ -1,0 +1,153 @@
+@import "tailwindcss";
+
+/* --------------------------------------------------------------------------
+   ACTPROVE flight-test console.
+
+   Six colours, no more. `alert` is the only chromatic value in the product and
+   it appears only when something is genuinely wrong: a limit exceeded, a
+   flameout, a stall, an infeasible launch. When the flight is nominal the
+   screen is black, white and grey.
+   -------------------------------------------------------------------------- */
+
+@theme {
+  --color-void: #000000;
+  --color-panel: #0a0a0a;
+  --color-rule: #1c1c1c;
+  --color-dim: #6b6b6b;
+  --color-bright: #ffffff;
+  --color-alert: #ff3b1f;
+
+  --font-sans: var(--font-inter-tight), system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, "SF Mono", monospace;
+
+  --radius-none: 0px;
+
+  /* 8px base grid */
+  --spacing: 4px;
+}
+
+:root {
+  color-scheme: dark;
+  --rule: #1c1c1c;
+  --track-h: 240px;
+  --head-h: 44px;
+}
+
+* {
+  border-radius: 0;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--color-void);
+  color: var(--color-bright);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.35;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Every number in the product is monospace with tabular figures and a fixed
+   decimal count. Digits must not reflow while the trajectory plays at 50 Hz. */
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "zero" 1;
+  letter-spacing: 0;
+  white-space: pre;
+}
+
+/* Wide tracking echoes the wordmark. Reserved for the brand lockup and the
+   top-level region headers. Nothing else. */
+.tracked {
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.rule-t { border-top: 1px solid var(--color-rule); }
+.rule-b { border-bottom: 1px solid var(--color-rule); }
+.rule-l { border-left: 1px solid var(--color-rule); }
+.rule-r { border-right: 1px solid var(--color-rule); }
+
+.hit {
+  transition: border-color 60ms linear, color 60ms linear;
+}
+
+button:focus-visible,
+input:focus-visible,
+[tabindex]:focus-visible {
+  outline: 1px solid var(--color-bright);
+  outline-offset: -1px;
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--color-void); }
+::-webkit-scrollbar-thumb { background: #262626; }
+::-webkit-scrollbar-thumb:hover { background: #3a3a3a; }
+* { scrollbar-width: thin; scrollbar-color: #262626 var(--color-void); }
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  height: 18px;
+  width: 100%;
+  cursor: ew-resize;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 1px;
+  background: var(--color-rule);
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 2px;
+  height: 14px;
+  margin-top: -6.5px;
+  background: var(--color-bright);
+  border: 0;
+}
+input[type="range"]:disabled::-webkit-slider-thumb { background: var(--color-dim); }
+input[type="range"]::-moz-range-track { height: 1px; background: var(--color-rule); }
+input[type="range"]::-moz-range-thumb {
+  width: 2px; height: 14px; background: var(--color-bright); border: 0; border-radius: 0;
+}
+
+input[type="number"], input[type="text"] {
+  background: var(--color-void);
+  border: 1px solid var(--color-rule);
+  color: var(--color-bright);
+  padding: 2px 5px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; }
+
+input[type="checkbox"] {
+  appearance: none;
+  width: 12px; height: 12px;
+  border: 1px solid var(--color-rule);
+  background: var(--color-void);
+  display: inline-block;
+  vertical-align: -2px;
+}
+input[type="checkbox"]:checked { background: var(--color-bright); }
+
+/* uPlot, retuned to the console palette. */
+.uplot, .u-wrap { font-family: var(--font-mono) !important; }
+.u-legend { display: none !important; }
+.u-select { background: rgba(255, 255, 255, 0.06); }
+.u-cursor-x, .u-cursor-y { border-color: var(--color-dim) !important; }
+.u-axis { color: var(--color-dim); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

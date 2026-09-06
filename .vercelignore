@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+tests/
+scripts/dev_api.py
+scripts/checkpoint1.py
+*.pyc

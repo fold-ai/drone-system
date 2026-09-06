@@ -1,0 +1,311 @@
+# REAPER SIM
+
+Internal flight-performance simulation and test platform for the Reaper UAV.
+Actprove Defense Technologies.
+
+A carbon-composite, turbojet-powered UAV is modelled from rail launch through
+climb, acceleration, cruise and descent. Every number on screen comes from the
+physics solver. Nothing is clamped, smoothed or curve-fitted toward a nicer
+answer, and the interface never displays a quantity the solver did not produce.
+
+---
+
+## The headline result
+
+A 250 N class turbojet cannot push this airframe through Mach 1 in level flight.
+Ram drag on the captured stream is what stops it: at 3000 m and 200 m/s the
+engine makes 126 N of net thrust against 250 N static, and by M 1.0 it makes 88 N
+against the 1014 N the drag polar demands.
+
+| Configuration (3000 m, 15 kg) | Max level Mach | Thrust at M 1.0 | Drag at M 1.0 |
+|---|---|---|---|
+| Default, S = 0.30 m2 | **0.599** | 88 N | 1014 N |
+| S = 0.18 m2 | 0.718 | 88 N | 609 N |
+| S = 0.18 m2, CD0 0.016 | 0.762 | 88 N | 538 N |
+| S = 0.18, CD0 0.016, 11 km, 12 kg | 0.786 | 41 N | 174 N |
+
+Fifty-four configurations across wing area, CD0, altitude and mass were swept in
+`tests/test_physics.py`. The best of them reaches M 0.786. The tool's job is to
+show the size of that gap and which levers actually move it, which is why the
+aerodynamics panel leads with the thrust-against-drag crossing plot and a Mach 1
+deficit readout.
+
+## Launch
+
+The engine cannot launch this aircraft. On a 3 m rail at 45 degrees it reaches
+8.2 m/s against a stall speed of 28.3 m/s, so a RATO booster is mandatory.
+
+Solved minimum booster for a 3 m rail: **2302 N for 184 ms, 425 N s, 18 g peak.**
+
+Total impulse is close to invariant with rail length while thrust falls roughly
+as one over length. A longer rail buys a smaller motor, not less energy:
+
+| Rail | Thrust | Burn | Impulse | Peak |
+|---|---|---|---|---|
+| 1.5 m | 4741 N | 92 ms | 437 N s | 36 g |
+| 3.0 m | 2302 N | 184 ms | 425 N s | 18 g |
+| 6.0 m | 1082 N | 368 ms | 399 N s | 9 g |
+| 10.0 m | 594 N | 613 ms | 364 N s | 5 g |
+
+---
+
+## Running it
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install numpy   # numpy is only needed for bench-data fitting
+npm install
+npm run dev          # solver on :8787, console on :3000
+```
+
+`npm run dev` starts two processes. `scripts/dev_api.py` serves `/api/simulate`
+and `/api/feasibility` from the same handler modules Vercel runs, and
+`next.config.ts` proxies `/api/*` to it in development only. The browser talks to
+one URL shape in both environments.
+
+| Command | What it does |
+|---|---|
+| `npm run test` | The physics validation suite (also runs under `pytest tests/`) |
+| `npm run checkpoint` | Prints the stage 1 solver report reproduced above |
+| `npm run types` | Regenerates `lib/types.ts` from the Python dataclasses |
+| `npm run types:check` | Fails if `lib/types.ts` is out of date |
+| `npm run build` | Production build |
+
+### Deploying
+
+`vercel deploy`. `vercel.json` gives the Python functions a 10 s ceiling and
+1769 MB, which is one full vCPU. **The Vercel preview deploy is the one thing in
+this build that has not been verified**, because it needs an account; the
+runtime differs from local CPython and the timing below should be re-measured
+there.
+
+---
+
+## Architecture
+
+The Python solver is authoritative and batch. It does not stream.
+
+1. The console posts a complete `MissionSpec` to `POST /api/simulate`.
+2. Python integrates the whole flight and returns a `Trajectory`: 50 Hz state
+   samples plus a summary, events, the fuel budget and the performance envelope.
+3. The browser plays that back against a clock at 0.25x, 1x, 2x or 10x with a
+   scrub timeline. The 3D view and every gauge read from the playback cursor.
+4. Moving the throttle lever at playback time *t* writes a node into the throttle
+   schedule at *t*, re-posts with a `resume` state, and splices the new
+   trajectory in from *t* onward.
+
+Physics stays deterministic and reproducible, there is no second copy of the
+model in JavaScript, and it fits serverless cleanly. There is no websocket.
+
+### Wire format
+
+A 300 s mission at 50 Hz is 15 150 samples across 41 columns; the 150 km mission
+the slider allows is 42 877. As JSON numbers those are 5.0 MB and 14 MB, both
+over Vercel's 4.5 MB response limit, and each costs the browser a parse of
+hundreds of thousands of numbers before the first frame.
+
+The columns therefore travel as one little-endian float32 buffer, byte-plane
+shuffled, deflated and base64 encoded. The shuffle groups every float's first
+byte together, then every second byte, and so on; across smooth telemetry the
+exponent and high-mantissa planes are nearly constant, so deflate finds the
+redundancy that interleaved bytes hide from it.
+
+| Mission | Samples | float32 | Plain base64 | Shuffled, deflated, base64 |
+|---|---|---|---|---|
+| 50 km | 15 150 | 2.48 MB | 3.31 MB | **0.57 MB** |
+| 90 km | 26 242 | 4.30 MB | 5.74 MB | **0.67 MB** |
+| 150 km | 42 877 | 7.03 MB | 9.38 MB | **0.99 MB** |
+
+Nothing is lost. float32 carries about seven significant digits, finer than any
+quantity here is known to, and the compression is exact. The browser undoes it
+with `DecompressionStream`, which is native, and reads the result straight into
+`Float32Array` views with no per-value parsing. Encoding costs 30 to 65 ms.
+
+If a caller drives the duration far past what the interface allows and the
+encoded body would still exceed 4 MB, the encoder decimates the output, reports
+the stride, and adds a warning. It never emits a body that cannot be delivered.
+
+`?format=f32raw` skips the compression, `?format=json` returns plain arrays (the
+tests use that path) and `?format=csv` returns the trajectory as CSV.
+
+### Measured timings
+
+Local, Apple silicon, CPython 3.13:
+
+| Operation | Time |
+|---|---|
+| Full 303 s mission, dt = 0.005 s, 60 600 RK4 steps | 520 - 620 ms solver |
+| Same, browser round trip including decode | 860 ms |
+| 150 km mission, 857 s, 171 400 RK4 steps | 1740 ms solver, 2475 ms round trip |
+| Interactive re-solve spliced from t+240 s | 138 ms solver, 199 ms round trip |
+| Interactive re-solve spliced from t+150 s | 292 ms solver, 486 ms round trip |
+| Interactive re-solve spliced from t+60 s | 427 ms solver, 624 ms round trip |
+| `/api/feasibility`, sizing and envelope only | 23 ms |
+| `/api/feasibility` with booster solve and rail trade | 118 ms |
+
+The splice cost scales with how much flight remains, so a late throttle change
+lands inside the 300 ms target and an early one takes about twice that. The
+solve time is dominated by CPython interpreter overhead, not by arithmetic: the
+transcendental functions in the derivative account for about 30 ms of a 520 ms
+solve, so there is no headroom to be had by simplifying the physics.
+
+Expect the Vercel runtime to be slower than these figures. Even at three times
+the local cost the longest mission the interface allows stays inside the 10 s
+function ceiling.
+
+---
+
+## The physics
+
+3-DOF point mass in the vertical plane plus heading for ground track. RK4, fixed
+`dt = 0.005 s`, output decimated to 50 Hz. Step-size convergence is checked in
+the suite: halving dt moves maximum Mach by 2e-6 and ground range by 4.6 m.
+
+**Atmosphere** (`_core/atmosphere.py`). ISA troposphere and lower stratosphere,
+with an optional non-standard-day offset and a constant headwind. At 3000 m the
+model gives rho 0.9091 kg/m3 and a 328.58 m/s.
+
+**Engine** (`_core/engine.py`). Momentum model with ram drag subtracted:
+
+```
+mdot(h, M, d) = mdot_0 * (rho/rho_0) * spool(d) * sqrt(1 + 0.35 M^2)
+T_net         = mdot * (Ve - V_inf)
+```
+
+Commanded and actual throttle are separate state variables with a first-order
+spool lag, 2.0 s up and 1.2 s down, and both are plotted. Every constant carries
+a note on where the number came from. `EngineProfile.from_bench_data()` refits
+the deck from a test-stand CSV of throttle, thrust and fuel flow; a static run
+constrains only the product `mdot_0 * Ve`, so pass a measured exhaust velocity to
+split it. The suite round-trips a synthetic bench file back to the deck that
+generated it.
+
+**Aerodynamics** (`_core/aero.py`). Parabolic polar with a tanh-blended transonic
+rise, not a step. Per-sample output includes dynamic pressure, L/D, thrust margin,
+specific excess power, the CD0 / induced / wave split, Reynolds number and a
+wave-drag flag.
+
+**Launch** (`_core/launch.py`). Constrained 1-DOF slide along the rail, then a
+handoff to free flight at the rail vector. Feasibility requires the exit speed to
+reach 1.15 x stall. The booster solver is a secant search on thrust with the burn
+time converged onto the actual rail transit time, which is the minimum-thrust
+solution; it answers in 8 ms, so the mission panel can call it while a slider
+moves.
+
+**Mission coupling** (`_core/mission.py`). The operator picks a distance. Climb
+and descent legs are integrated over altitude, the cruise leg is sized by Breguet
+range for a jet, a reserve is added, and the resulting fuel mass feeds back into
+gross mass, wing loading, stall speed, the rail-exit requirement and maximum
+Mach. The same calculation produces the mission timeline, so the generated
+schedules and the fuel budget always describe the same flight. Requesting more
+range than the tank can carry is reported, never clamped.
+
+### What the model says that the brief's mock-up did not
+
+Two results are worth flagging because they are not what a first look suggests.
+
+**Cruise L/D is 1.17, not 12.** At the requested M 0.55 and 3000 m, dynamic
+pressure is 14.9 kPa and the wing carries CL 0.028. Drag is essentially all
+parasite. Best L/D for this polar is 9.75 and it occurs at CL 0.468, which is
+45 m/s. The airframe has an enormous speed range and cruising at M 0.55 is a long
+way from its efficient point. That is a real design finding, not a modelling
+error, and the panel shows both numbers side by side.
+
+**The minimum sensible mission is about 31 km.** Climbing to 3000 m at 30 m/s
+covers 18.2 km and the descent covers 13.1 km. Below that the profile has no
+cruise leg at all, and the tool says so rather than inventing one.
+
+**Static margin falls to 0.9% MAC as the tank empties**, from 6.5% full, against
+a 3% limit. The default tank station is forward of the neutral point, so burning
+fuel walks the CG aft. The console raises it as a warning on every run.
+
+### Validation
+
+`tests/test_physics.py`, 35 checks, run with `npm run test` or `pytest tests/`.
+The required ones from the brief:
+
+- ISA at 3000 m within 0.5% on density and speed of sound.
+- Zero-thrust glide reaches the analytic L/D max within 2%; the integrated glide
+  peaks at 9.748 against an analytic 9.748.
+- With thrust and drag removed, total mechanical energy holds to 0.00002% over
+  60 s across a 600 m altitude swing.
+- Net thrust at 3000 m and 200 m/s is 126.4 N, 51% of the 250.2 N static figure.
+- Maximum level speed for the default configuration is M 0.599, and M 0.718 with
+  the wing cut to 0.18 m2.
+
+Plus: tropopause continuity, spool time constant, bench-data refit, fuel burned
+against the integrated flow, splice equivalence with a full solve, RK4 step
+convergence, determinism, uniform 50 Hz output, range-to-mass coupling, headwind
+and hot-day effects, and a check that no limit the solver applies is silent.
+
+---
+
+## Layout
+
+Single full-viewport shell, four regions, resizable dividers, no page scroll.
+
+- **Mission config**, left. Three tabs. `mission` carries the distance slider with
+  live derived fuel, gross mass and stall speed; `launch` carries the rail, the
+  feasibility verdict, the solved minimum booster and the rail-length trade;
+  `model` is the parameter drawer, generated from the Python dataclasses so a
+  constant cannot appear with a limit the solver has not agreed to.
+- **3D viewport**, centre. Rail at the configured length and angle, metric ground
+  grid, trajectory ribbon coloured by Mach with the flown part bright and the
+  path ahead dim, exhaust tied to actual throttle, booster plume and jettison.
+  Cameras chase, rail, side, top, orbit on keys 1 to 5. Attitude is the solved
+  flight-path angle and heading with no cosmetic banking. The Mach cone renders
+  only above M_dd.
+- **Aerodynamics**, right. Detaches into a real second browser window at `/aero`,
+  synced over a `BroadcastChannel`, for a second monitor during a test review.
+  The thrust-against-drag crossing plot is the one bold element on the screen.
+- **Bottom track**. Throttle lever, four uPlot charts, the editable throttle
+  schedule, and the scrub timeline with phase bands and event ticks.
+
+Keys: space to play, arrows to step, Home and End, 1-5 for cameras.
+
+### Design
+
+Six colour tokens and no more: `void #000000`, `panel #0A0A0A`, `rule #1C1C1C`,
+`dim #6B6B6B`, `bright #FFFFFF`, `alert #FF3B1F`. `alert` is the only chromatic
+value and it appears only when something is genuinely wrong. Inter Tight for
+interface text, JetBrains Mono with tabular figures and fixed field widths for
+every number, because digits must not reflow at 50 Hz. Zero border radius except
+the throttle handle. Panels separated by 1px rules, not shadows. No motion beyond
+a 60 ms border colour change; the only animation in the product is the playback
+itself. `prefers-reduced-motion` disables the Mach cone tightening and keeps
+playback.
+
+---
+
+## Layout of the source
+
+```
+api/
+  simulate.py           MissionSpec -> Trajectory
+  feasibility.py        launch, booster sizing, performance envelope
+  _core/
+    schema.py           every dataclass; the single definition of the wire format
+    constants.py        physical constants
+    atmosphere.py       ISA
+    engine.py           EngineProfile + from_bench_data()
+    aero.py             drag polar
+    performance.py      thrust against drag, max level Mach, Mach 1 deficit
+    launch.py           rail integration, feasibility, booster solver
+    mission.py          range to fuel, mission timeline, schedules
+    dynamics.py         RK4, rail phase, free flight, events
+    derived.py          values the interface needs but must not recompute
+    encode.py           float32 wire encoding and CSV
+    httputil.py         request and response helpers
+app/                    layout, console, api-client, /aero detached window
+components/             viewport, panels, timeline, charts, ui
+lib/                    store, types (generated), playback, broadcast, format
+scripts/                gen_types.py, dev_api.py, checkpoint1.py
+tests/test_physics.py
+```
+
+## Assets still to drop in
+
+- `public/models/reaper.glb` - the airframe. Until then the viewport draws a
+  labelled placeholder with the configured span and length.
+- `public/brand/actprove.svg` - chevron and wordmark, white on transparent. Until
+  then the header draws the chevron inline.
+- Engine bench data CSV - `EngineProfile.from_bench_data()` accepts it already.
