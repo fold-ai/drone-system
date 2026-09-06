@@ -23,6 +23,7 @@ from _core.httputil import guarded, read_json, send                      # noqa:
 from _core.launch import feasibility, rail_length_trade, run_rail, solve_booster  # noqa: E402
 from _core.mission import resolve_profile, size_mission                  # noqa: E402
 from _core.performance import mach1_deficit, mach_sweep                  # noqa: E402
+from _core.planform import build as build_planform, reconcile             # noqa: E402
 from _core.schema import MissionSpec, from_dict, to_dict                 # noqa: E402
 
 
@@ -43,8 +44,11 @@ def _run(handler: BaseHTTPRequestHandler, body: dict) -> None:
     sweep_mass = float(opts.get("sweep_mass_kg", mass))
     d_isa = spec.atmosphere.delta_isa_k
 
+    plan_geom = build_planform(spec.airframe)
     payload = {
         "ok": True,
+        "planform": to_dict(plan_geom),
+        "reconciliation": to_dict(reconcile(spec.airframe, plan_geom)),
         "fuel": to_dict(budget),
         "resolved": to_dict(resolved),
         "launch": to_dict(lf),

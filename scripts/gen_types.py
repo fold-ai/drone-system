@@ -26,13 +26,14 @@ sys.path.insert(0, os.path.join(ROOT, "api"))
 from _core import derived as derived_mod          # noqa: E402
 from _core import encode as encode_mod            # noqa: E402
 from _core import engine as engine_mod            # noqa: E402
+from _core import planform as planform_mod       # noqa: E402
 from _core import schema as schema_mod            # noqa: E402
 from _core.dynamics import COLUMNS                # noqa: E402
 
 OUT = os.path.join(ROOT, "lib", "types.ts")
 
 EMIT = [
-    (schema_mod, ["ScheduleNode", "AirframeSpec", "AtmosphereSpec", "BoosterSpec",
+    (schema_mod, ["ScheduleNode", "PlanformSpec", "AirframeSpec", "AtmosphereSpec", "BoosterSpec",
                   "LaunchSpec", "MissionProfile", "ControlSpec", "IntegrationSpec",
                   "ResumeState", "MissionSpec", "FlightEvent", "ProfilePlan",
                   "ResolvedProfile", "FuelBudget", "LaunchFeasibility",
@@ -40,6 +41,7 @@ EMIT = [
                   "Trajectory", "SimulationResult"]),
     (engine_mod, ["EngineProfile"]),
     (derived_mod, ["Derived"]),
+    (planform_mod, ["SpanStation", "Planform", "Reconciliation"]),
 ]
 
 SCALARS = {"float": "number", "int": "number", "bool": "boolean", "str": "string"}
@@ -229,6 +231,8 @@ def build() -> str:
         "",
         "export interface FeasibilityResponse {",
         "  ok: boolean;",
+        "  planform: Planform;",
+        "  reconciliation: Reconciliation;",
         "  fuel: FuelBudget;",
         "  resolved: ResolvedProfile;",
         "  launch: LaunchFeasibility;",
@@ -274,6 +278,7 @@ def build() -> str:
     ]
     meta: Dict[str, Any] = {}
     meta.update(meta_for(schema_mod.AirframeSpec, comments.get("AirframeSpec", {}), "airframe"))
+    meta.update(meta_for(schema_mod.PlanformSpec, comments.get("PlanformSpec", {}), "airframe.planform"))
     meta.update(meta_for(engine_mod.EngineProfile, comments.get("EngineProfile", {}), "engine"))
     meta.update(meta_for(schema_mod.AtmosphereSpec, comments.get("AtmosphereSpec", {}), "atmosphere"))
     meta.update(meta_for(schema_mod.LaunchSpec, comments.get("LaunchSpec", {}), "launch"))
@@ -285,6 +290,7 @@ def build() -> str:
     parts.append("")
     parts.append("export const MODEL_PARAM_GROUPS: { title: string; prefix: string }[] = [")
     parts.append('  { title: "Airframe", prefix: "airframe" },')
+    parts.append('  { title: "Planform", prefix: "airframe.planform" },')
     parts.append('  { title: "Engine", prefix: "engine" },')
     parts.append('  { title: "Atmosphere", prefix: "atmosphere" },')
     parts.append('  { title: "Launch", prefix: "launch" },')

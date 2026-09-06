@@ -8,6 +8,7 @@ import { Slider, Toggle } from "@/components/ui/Slider";
 import { fixed } from "@/lib/format";
 import { getPath, useSim } from "@/lib/store";
 import { FIELD_META } from "@/lib/types";
+import { GeometryCheck } from "./GeometryCheck";
 import { ModelParams } from "./ModelParams";
 
 function meta(path: string) {
@@ -205,6 +206,9 @@ export function MissionConfig() {
                 {fuel.note}
               </p>
             )}
+            <div className="mt-3">
+              <GeometryCheck />
+            </div>
           </div>
         </div>
       )}

@@ -546,6 +546,81 @@ def test_nothing_is_silently_clamped():
          f"{sorted(kinds)}")
 
 
+
+
+# ==========================================================================
+# 9. Planform geometry against the reference the polar uses
+# ==========================================================================
+
+def test_planform_area_is_the_integral_of_the_chord_distribution():
+    from _core import planform
+    af = AirframeSpec()
+    pl = planform.build(af)
+    # Independent trapezoidal check against the module's own integration.
+    n = 2000
+    half = af.span_m / 2
+    total = 0.0
+    for i in range(n):
+        y = (i + 0.5) * half / n
+        total += (planform._te_x(af, af.planform, y, half)
+                  - planform._le_x(af.planform, y, half)) * half / n
+    assert abs(2 * total - pl.area_m2) / pl.area_m2 < 1e-6
+    assert pl.root_chord_m > pl.tip_chord_m > 0
+    assert 0 < pl.taper_ratio < 1
+    note(f"Planform: {pl.area_m2:.3f} m2, AR {pl.aspect_ratio:.2f}, MAC {pl.mac_m:.3f} m, "
+         f"root {pl.root_chord_m:.3f} m, tip {pl.tip_chord_m:.3f} m")
+
+
+def test_planform_scales_with_span_and_length():
+    from _core import planform
+    base = planform.build(AirframeSpec())
+    bigger = planform.build(AirframeSpec(span_m=2.20, length_m=4.00))
+    # Doubling both dimensions at fixed shape must quadruple the area.
+    assert abs(bigger.area_m2 / base.area_m2 - 4.0) < 0.02
+    assert abs(bigger.aspect_ratio / base.aspect_ratio - 1.0) < 0.02
+    note(f"Doubling span and length takes the planform from {base.area_m2:.3f} to "
+         f"{bigger.area_m2:.3f} m2 at constant aspect ratio {base.aspect_ratio:.2f}")
+
+
+def test_reconciliation_flags_the_reference_area_mismatch():
+    """The drawn blended wing body and the reference area the polar is written to
+    are not the same shape, and the tool has to say so rather than pick one."""
+    from _core import planform
+    af = AirframeSpec()
+    r = planform.reconcile(af)
+    assert not r.consistent
+    assert r.area_error > 1.0                      # drawn area is several times the reference
+    assert any("referenced to" in w for w in r.warnings)
+    assert r.ld_max_drawn < r.ld_max_reference     # a fatter reference costs L/D
+    note(f"Reference area mismatch {r.area_error * 100:+.0f}%: L/D max {r.ld_max_reference:.2f} "
+         f"on the polar's area against {r.ld_max_drawn:.2f} on the drawn shape")
+
+
+def test_adopting_the_drawn_geometry_makes_it_consistent():
+    from _core import planform
+    af = AirframeSpec()
+    pl = planform.build(af)
+    adopted = AirframeSpec(wing_area_m2=pl.area_m2, mac_m=pl.mac_m)
+    r = planform.reconcile(adopted)
+    assert abs(r.area_error) < 1e-6
+    assert abs(r.mac_error) < 1e-6
+    # Span to length still disagrees with the CAD; adopting area does not fix shape.
+    assert any("Span to length" in w for w in r.warnings)
+    note("Adopting the drawn area and chord clears the area and MAC warnings; the span to "
+         "length proportion is a separate disagreement and stays flagged")
+
+
+def test_span_load_is_bounded_and_departs_from_elliptical():
+    from _core import planform
+    pl = planform.build(AirframeSpec())
+    assert len(pl.stations) == 41
+    assert all(s.chord_m >= 0 for s in pl.stations)
+    assert pl.stations[0].chord_m > pl.stations[-1].chord_m
+    worst = max(pl.stations[:-1], key=lambda s: abs(s.departure))
+    assert abs(worst.departure) > 0.02
+    note(f"Schrenk span load departs from elliptical by {worst.departure * 100:+.0f}% at "
+         f"eta {worst.eta:.2f}; this is an approximation, not a lifting-line solve")
+
 # ==========================================================================
 
 def main() -> int:

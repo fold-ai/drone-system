@@ -29,6 +29,34 @@ class ScheduleNode:
 # --------------------------------------------------------------------------
 
 @dataclass
+class PlanformSpec:
+    """Cranked-delta blended wing body, from the ACT-1 plan-view CAD.
+
+    These describe the shape that gets drawn and the shape the planform area is
+    measured from. They are geometry only: the drag polar is referenced to
+    AirframeSpec.wing_area_m2, and planform.reconcile() reports when the two
+    disagree rather than quietly reconciling them.
+    """
+    sweep_inboard_deg: float = 67.0   # inboard leading-edge sweep
+    sweep_outer_deg: float = 40.0     # outer panel sweep, aft of the crank
+    crank_frac: float = 0.58          # crank station as a fraction of semispan
+    radome_frac: float = 0.30         # ogive radome length as a fraction of overall
+    body_halfwidth_frac: float = 0.24 # centre body half-width, fraction of semispan
+    te_notch_halfwidth_frac: float = 0.10  # exhaust notch half-width, fraction of semispan
+    te_notch_depth_frac: float = 0.09      # notch depth, fraction of overall length
+    tip_chord_frac: float = 1.00      # 1.0 = squared tip running back to the TE
+    thickness_root_frac: float = 0.135     # t/c at the centreline
+    thickness_tip_frac: float = 0.070      # t/c at the tip
+    twist_root_deg: float = 0.0
+    twist_tip_deg: float = -2.0       # washout; geometry only, not fed to the polar
+    inlet_start_frac: float = 0.42    # dorsal inlet lip, fraction of length
+    inlet_length_frac: float = 0.16
+    engine_radius_frac: float = 0.055 # engine casing radius as a fraction of length
+    fin_span_frac: float = 0.10       # blade surface height, fraction of semispan
+    fin_station_frac: float = 0.62    # blade station, fraction of semispan
+
+
+@dataclass
 class AirframeSpec:
     """Carbon-composite blended-delta UAV. All lengths measured aft from the nose datum."""
     # planform
@@ -60,6 +88,9 @@ class AirframeSpec:
     x_fuel_m: float = 0.80
     x_np_m: float = 0.96             # neutral point
     static_margin_min: float = 0.03  # flag below 3% MAC
+
+    planform: PlanformSpec = field(default_factory=PlanformSpec)
+    planform_area_tolerance: float = 0.02   # warn above 2% disagreement
 
     @property
     def aspect_ratio(self) -> float:
@@ -537,6 +568,25 @@ FIELD_RANGES: Dict[str, tuple] = {
     "airframe.x_fuel_m": (0.0, 4.0, 0.01),
     "airframe.x_np_m": (0.0, 4.0, 0.01),
     "airframe.static_margin_min": (0.0, 0.25, 0.005),
+    "airframe.planform_area_tolerance": (0.005, 0.25, 0.005),
+    # planform geometry
+    "airframe.planform.sweep_inboard_deg": (35.0, 80.0, 0.5),
+    "airframe.planform.sweep_outer_deg": (10.0, 70.0, 0.5),
+    "airframe.planform.crank_frac": (0.20, 0.95, 0.01),
+    "airframe.planform.radome_frac": (0.10, 0.50, 0.01),
+    "airframe.planform.body_halfwidth_frac": (0.05, 0.60, 0.01),
+    "airframe.planform.te_notch_halfwidth_frac": (0.0, 0.35, 0.01),
+    "airframe.planform.te_notch_depth_frac": (0.0, 0.30, 0.005),
+    "airframe.planform.tip_chord_frac": (0.10, 1.00, 0.01),
+    "airframe.planform.thickness_root_frac": (0.05, 0.25, 0.005),
+    "airframe.planform.thickness_tip_frac": (0.03, 0.20, 0.005),
+    "airframe.planform.twist_root_deg": (-6.0, 6.0, 0.1),
+    "airframe.planform.twist_tip_deg": (-8.0, 4.0, 0.1),
+    "airframe.planform.inlet_start_frac": (0.20, 0.80, 0.01),
+    "airframe.planform.inlet_length_frac": (0.05, 0.40, 0.01),
+    "airframe.planform.engine_radius_frac": (0.02, 0.15, 0.005),
+    "airframe.planform.fin_span_frac": (0.0, 0.30, 0.01),
+    "airframe.planform.fin_station_frac": (0.20, 0.95, 0.01),
     # engine
     "engine.mdot_0": (0.10, 1.50, 0.005),
     "engine.ve": (250.0, 900.0, 1.0),

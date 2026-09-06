@@ -12,6 +12,43 @@ export interface ScheduleNode {
   value: number;
 }
 
+/** Cranked-delta blended wing body, from the ACT-1 plan-view CAD. */
+export interface PlanformSpec {
+  /** inboard leading-edge sweep [deg] */
+  sweep_inboard_deg: number;
+  /** outer panel sweep, aft of the crank [deg] */
+  sweep_outer_deg: number;
+  /** crank station as a fraction of semispan */
+  crank_frac: number;
+  /** ogive radome length as a fraction of overall */
+  radome_frac: number;
+  /** centre body half-width, fraction of semispan */
+  body_halfwidth_frac: number;
+  /** exhaust notch half-width, fraction of semispan */
+  te_notch_halfwidth_frac: number;
+  /** notch depth, fraction of overall length */
+  te_notch_depth_frac: number;
+  /** 1.0 = squared tip running back to the TE */
+  tip_chord_frac: number;
+  /** t/c at the centreline */
+  thickness_root_frac: number;
+  /** t/c at the tip */
+  thickness_tip_frac: number;
+  /**  [deg] */
+  twist_root_deg: number;
+  /** washout; geometry only, not fed to the polar [deg] */
+  twist_tip_deg: number;
+  /** dorsal inlet lip, fraction of length */
+  inlet_start_frac: number;
+  inlet_length_frac: number;
+  /** engine casing radius as a fraction of length */
+  engine_radius_frac: number;
+  /** blade surface height, fraction of semispan */
+  fin_span_frac: number;
+  /** blade station, fraction of semispan */
+  fin_station_frac: number;
+}
+
 /** Carbon-composite blended-delta UAV. All lengths measured aft from the nose datum. */
 export interface AirframeSpec {
   /** S [m2] */
@@ -58,6 +95,9 @@ export interface AirframeSpec {
   x_np_m: number;
   /** flag below 3% MAC */
   static_margin_min: number;
+  planform: PlanformSpec;
+  /** warn above 2% disagreement */
+  planform_area_tolerance: number;
 }
 
 /** AtmosphereSpec(delta_isa_k: 'float' = 0.0, headwind_ms: 'float' = 0.0, ground_altitude_m: 'float' = 0.0) */
@@ -516,6 +556,80 @@ export interface Derived {
   cruise_tas_at_target_ms: number;
 }
 
+/** SpanStation(y_m: 'float', eta: 'float', le_x_m: 'float', te_x_m: 'float', chord_m: 'float', thickness_frac: 'float', twist_deg: 'float', schrenk_load: 'float', elliptic_load: 'float', departure: 'float') */
+export interface SpanStation {
+  /**  [m] */
+  y_m: number;
+  /** y / (b/2) */
+  eta: number;
+  /**  [m] */
+  le_x_m: number;
+  /**  [m] */
+  te_x_m: number;
+  /**  [m] */
+  chord_m: number;
+  thickness_frac: number;
+  /**  [deg] */
+  twist_deg: number;
+  /** local lift per unit span, normalised to mean */
+  schrenk_load: number;
+  elliptic_load: number;
+  /** schrenk - elliptic, as a fraction of elliptic */
+  departure: number;
+}
+
+/** Planform(span_m: 'float', length_m: 'float', area_m2: 'float', mac_m: 'float', aspect_ratio: 'float', root_chord_m: 'float', tip_chord_m: 'float', crank_y_m: 'float', crank_x_m: 'float', tip_le_x_m: 'float', taper_ratio: 'float', outline: 'List[Tuple[float, float]]' = <factory>, stations: 'List[SpanStation]' = <factory>) */
+export interface Planform {
+  /**  [m] */
+  span_m: number;
+  /**  [m] */
+  length_m: number;
+  /** full planform area enclosed by the drawn outline [m2] */
+  area_m2: number;
+  /**  [m] */
+  mac_m: number;
+  aspect_ratio: number;
+  /**  [m] */
+  root_chord_m: number;
+  /**  [m] */
+  tip_chord_m: number;
+  /**  [m] */
+  crank_y_m: number;
+  /**  [m] */
+  crank_x_m: number;
+  /**  [m] */
+  tip_le_x_m: number;
+  taper_ratio: number;
+  /** half planform, x aft, y out */
+  outline: number[][];
+  stations: SpanStation[];
+}
+
+/** How far the drawn shape is from the numbers the drag polar is written to. */
+export interface Reconciliation {
+  /**  [m2] */
+  drawn_area_m2: number;
+  /**  [m2] */
+  reference_area_m2: number;
+  /** signed fraction, (drawn - reference) / reference */
+  area_error: number;
+  drawn_aspect_ratio: number;
+  reference_aspect_ratio: number;
+  /**  [m] */
+  drawn_mac_m: number;
+  /**  [m] */
+  reference_mac_m: number;
+  mac_error: number;
+  span_length_ratio: number;
+  cad_span_length_ratio: number;
+  span_length_error: number;
+  tolerance: number;
+  consistent: boolean;
+  ld_max_reference: number;
+  ld_max_drawn: number;
+  warnings: string[];
+}
+
 /** Columns of the 50 Hz trajectory, in the order the solver packs them. */
 export const TRAJECTORY_COLUMNS = ["t", "x_m", "y_m", "s_ground_m", "h_m", "v_tas_ms", "v_ground_ms", "mach", "gamma_deg", "psi_deg", "bank_deg", "roc_ms", "mass_kg", "fuel_kg", "fuel_flow_kgs", "throttle_cmd", "throttle_act", "thrust_n", "drag_n", "lift_n", "thrust_margin_n", "ps_ms", "cl", "cd", "cd0", "cdi", "cd_wave", "ld", "q_pa", "load_factor", "rho", "a_sound_ms", "temp_k", "press_pa", "reynolds", "x_cg_m", "static_margin", "wave_drag_active", "stall_limited", "lift_limited", "phase"] as const;
 export type TrajectoryColumn = (typeof TRAJECTORY_COLUMNS)[number];
@@ -553,6 +667,8 @@ export interface ApiError {
 
 export interface FeasibilityResponse {
   ok: boolean;
+  planform: Planform;
+  reconciliation: Reconciliation;
   fuel: FuelBudget;
   resolved: ResolvedProfile;
   launch: LaunchFeasibility;
@@ -600,7 +716,27 @@ export const DEFAULT_MISSION_SPEC: MissionSpec = {
     "x_payload_m": 0.55,
     "x_fuel_m": 0.8,
     "x_np_m": 0.96,
-    "static_margin_min": 0.03
+    "static_margin_min": 0.03,
+    "planform": {
+      "sweep_inboard_deg": 67.0,
+      "sweep_outer_deg": 40.0,
+      "crank_frac": 0.58,
+      "radome_frac": 0.3,
+      "body_halfwidth_frac": 0.24,
+      "te_notch_halfwidth_frac": 0.1,
+      "te_notch_depth_frac": 0.09,
+      "tip_chord_frac": 1.0,
+      "thickness_root_frac": 0.135,
+      "thickness_tip_frac": 0.07,
+      "twist_root_deg": 0.0,
+      "twist_tip_deg": -2.0,
+      "inlet_start_frac": 0.42,
+      "inlet_length_frac": 0.16,
+      "engine_radius_frac": 0.055,
+      "fin_span_frac": 0.1,
+      "fin_station_frac": 0.62
+    },
+    "planform_area_tolerance": 0.02
   },
   "engine": {
     "mdot_0": 0.45,
@@ -919,6 +1055,202 @@ export const FIELD_META: Record<string, FieldMeta> =
     "min": 0.0,
     "max": 0.25,
     "step": 0.005
+  },
+  "airframe.planform_area_tolerance": {
+    "path": "airframe.planform_area_tolerance",
+    "label": "planform area tolerance",
+    "unit": "",
+    "type": "number",
+    "default": 0.02,
+    "doc": "warn above 2% disagreement",
+    "min": 0.005,
+    "max": 0.25,
+    "step": 0.005
+  },
+  "airframe.planform.sweep_inboard_deg": {
+    "path": "airframe.planform.sweep_inboard_deg",
+    "label": "sweep inboard deg",
+    "unit": "deg",
+    "type": "number",
+    "default": 67.0,
+    "doc": "inboard leading-edge sweep",
+    "min": 35.0,
+    "max": 80.0,
+    "step": 0.5
+  },
+  "airframe.planform.sweep_outer_deg": {
+    "path": "airframe.planform.sweep_outer_deg",
+    "label": "sweep outer deg",
+    "unit": "deg",
+    "type": "number",
+    "default": 40.0,
+    "doc": "outer panel sweep, aft of the crank",
+    "min": 10.0,
+    "max": 70.0,
+    "step": 0.5
+  },
+  "airframe.planform.crank_frac": {
+    "path": "airframe.planform.crank_frac",
+    "label": "crank frac",
+    "unit": "",
+    "type": "number",
+    "default": 0.58,
+    "doc": "crank station as a fraction of semispan",
+    "min": 0.2,
+    "max": 0.95,
+    "step": 0.01
+  },
+  "airframe.planform.radome_frac": {
+    "path": "airframe.planform.radome_frac",
+    "label": "radome frac",
+    "unit": "",
+    "type": "number",
+    "default": 0.3,
+    "doc": "ogive radome length as a fraction of overall",
+    "min": 0.1,
+    "max": 0.5,
+    "step": 0.01
+  },
+  "airframe.planform.body_halfwidth_frac": {
+    "path": "airframe.planform.body_halfwidth_frac",
+    "label": "body halfwidth frac",
+    "unit": "",
+    "type": "number",
+    "default": 0.24,
+    "doc": "centre body half-width, fraction of semispan",
+    "min": 0.05,
+    "max": 0.6,
+    "step": 0.01
+  },
+  "airframe.planform.te_notch_halfwidth_frac": {
+    "path": "airframe.planform.te_notch_halfwidth_frac",
+    "label": "te notch halfwidth frac",
+    "unit": "",
+    "type": "number",
+    "default": 0.1,
+    "doc": "exhaust notch half-width, fraction of semispan",
+    "min": 0.0,
+    "max": 0.35,
+    "step": 0.01
+  },
+  "airframe.planform.te_notch_depth_frac": {
+    "path": "airframe.planform.te_notch_depth_frac",
+    "label": "te notch depth frac",
+    "unit": "",
+    "type": "number",
+    "default": 0.09,
+    "doc": "notch depth, fraction of overall length",
+    "min": 0.0,
+    "max": 0.3,
+    "step": 0.005
+  },
+  "airframe.planform.tip_chord_frac": {
+    "path": "airframe.planform.tip_chord_frac",
+    "label": "tip chord frac",
+    "unit": "",
+    "type": "number",
+    "default": 1.0,
+    "doc": "1.0 = squared tip running back to the TE",
+    "min": 0.1,
+    "max": 1.0,
+    "step": 0.01
+  },
+  "airframe.planform.thickness_root_frac": {
+    "path": "airframe.planform.thickness_root_frac",
+    "label": "thickness root frac",
+    "unit": "",
+    "type": "number",
+    "default": 0.135,
+    "doc": "t/c at the centreline",
+    "min": 0.05,
+    "max": 0.25,
+    "step": 0.005
+  },
+  "airframe.planform.thickness_tip_frac": {
+    "path": "airframe.planform.thickness_tip_frac",
+    "label": "thickness tip frac",
+    "unit": "",
+    "type": "number",
+    "default": 0.07,
+    "doc": "t/c at the tip",
+    "min": 0.03,
+    "max": 0.2,
+    "step": 0.005
+  },
+  "airframe.planform.twist_root_deg": {
+    "path": "airframe.planform.twist_root_deg",
+    "label": "twist root deg",
+    "unit": "deg",
+    "type": "number",
+    "default": 0.0,
+    "min": -6.0,
+    "max": 6.0,
+    "step": 0.1
+  },
+  "airframe.planform.twist_tip_deg": {
+    "path": "airframe.planform.twist_tip_deg",
+    "label": "twist tip deg",
+    "unit": "deg",
+    "type": "number",
+    "default": -2.0,
+    "doc": "washout; geometry only, not fed to the polar",
+    "min": -8.0,
+    "max": 4.0,
+    "step": 0.1
+  },
+  "airframe.planform.inlet_start_frac": {
+    "path": "airframe.planform.inlet_start_frac",
+    "label": "inlet start frac",
+    "unit": "",
+    "type": "number",
+    "default": 0.42,
+    "doc": "dorsal inlet lip, fraction of length",
+    "min": 0.2,
+    "max": 0.8,
+    "step": 0.01
+  },
+  "airframe.planform.inlet_length_frac": {
+    "path": "airframe.planform.inlet_length_frac",
+    "label": "inlet length frac",
+    "unit": "",
+    "type": "number",
+    "default": 0.16,
+    "min": 0.05,
+    "max": 0.4,
+    "step": 0.01
+  },
+  "airframe.planform.engine_radius_frac": {
+    "path": "airframe.planform.engine_radius_frac",
+    "label": "engine radius frac",
+    "unit": "",
+    "type": "number",
+    "default": 0.055,
+    "doc": "engine casing radius as a fraction of length",
+    "min": 0.02,
+    "max": 0.15,
+    "step": 0.005
+  },
+  "airframe.planform.fin_span_frac": {
+    "path": "airframe.planform.fin_span_frac",
+    "label": "fin span frac",
+    "unit": "",
+    "type": "number",
+    "default": 0.1,
+    "doc": "blade surface height, fraction of semispan",
+    "min": 0.0,
+    "max": 0.3,
+    "step": 0.01
+  },
+  "airframe.planform.fin_station_frac": {
+    "path": "airframe.planform.fin_station_frac",
+    "label": "fin station frac",
+    "unit": "",
+    "type": "number",
+    "default": 0.62,
+    "doc": "blade station, fraction of semispan",
+    "min": 0.2,
+    "max": 0.95,
+    "step": 0.01
   },
   "engine.mdot_0": {
     "path": "engine.mdot_0",
@@ -1367,6 +1699,7 @@ export const FIELD_META: Record<string, FieldMeta> =
 
 export const MODEL_PARAM_GROUPS: { title: string; prefix: string }[] = [
   { title: "Airframe", prefix: "airframe" },
+  { title: "Planform", prefix: "airframe.planform" },
   { title: "Engine", prefix: "engine" },
   { title: "Atmosphere", prefix: "atmosphere" },
   { title: "Launch", prefix: "launch" },

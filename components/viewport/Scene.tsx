@@ -6,6 +6,7 @@ import * as THREE from "three";
 import { fixed } from "@/lib/format";
 import { sampleAt } from "@/lib/playback";
 import { type CameraPreset, CAMERA_PRESETS, useSim } from "@/lib/store";
+import { GeometryCheck } from "@/components/panels/GeometryCheck";
 import { Act1, useModelAvailable } from "./Act1";
 import { FieldLegend, FieldSelector } from "./FieldLegend";
 import { Gnomon } from "./Gnomon";
@@ -470,6 +471,9 @@ export function Scene() {
           <div className="border border-rule bg-void/85 px-2 py-1 text-[9px] text-dim">
             range rings {RANGE_RING_SPACING_M / 1000} km &middot; altitude posts every 10 km, ticked
             500 m &middot; drag to orbit, wheel to zoom
+          </div>
+          <div className="max-w-[420px]">
+            <GeometryCheck compact />
           </div>
           {hasModel === false && (
             <div className="border border-rule bg-void/85 px-2 py-1 text-[10px] text-dim">
