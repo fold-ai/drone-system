@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { Button } from "@/components/ui/Button";
 import { Panel, SubHead } from "@/components/ui/Panel";
 import { Readout, TextRow, Verdict } from "@/components/ui/Readout";
 import { Slider, Toggle } from "@/components/ui/Slider";
-import { fixed, pct } from "@/lib/format";
-import { useSim } from "@/lib/store";
+import { fixed } from "@/lib/format";
+import { getPath, useSim } from "@/lib/store";
 import { FIELD_META } from "@/lib/types";
 import { ModelParams } from "./ModelParams";
 
@@ -23,6 +23,55 @@ function meta(path: string) {
 }
 
 /**
+ * One configuration control.
+ *
+ * Range, step, unit and default all come from FIELD_META, which is generated
+ * from the Python dataclasses, so a control cannot offer a value the solver has
+ * not agreed to. The reference column is the same field in the held run.
+ */
+function Field({ path, label }: { path: string; label: string }) {
+  const spec = useSim((s) => s.spec);
+  const ghost = useSim((s) => s.ghost);
+  const focusField = useSim((s) => s.focusField);
+  const setField = useSim((s) => s.setField);
+  const resetField = useSim((s) => s.resetField);
+  const m = meta(path);
+  const value = getPath(spec, path);
+  if (typeof value !== "number") return null;
+  const ref = ghost ? getPath(ghost.spec, path) : undefined;
+  return (
+    <Slider
+      label={label}
+      unit={m.unit}
+      value={value}
+      min={m.min}
+      max={m.max}
+      step={m.step}
+      defaultValue={m.default}
+      reference={typeof ref === "number" ? ref : undefined}
+      path={path}
+      highlight={focusField === path}
+      onInput={(v) => setField(path, v)}
+      onReset={() => resetField(path)}
+      title={m.doc}
+    />
+  );
+}
+
+/** Scroll a focused field into view and clear the focus once it has landed. */
+function useFocusScroll(scope: React.RefObject<HTMLElement | null>) {
+  const focusField = useSim((s) => s.focusField);
+  const focusOn = useSim((s) => s.focusOn);
+  useEffect(() => {
+    if (!focusField) return undefined;
+    const el = scope.current?.querySelector(`[data-field="${focusField}"]`);
+    el?.scrollIntoView({ block: "center", behavior: "auto" });
+    const id = window.setTimeout(() => focusOn(null), 2600);
+    return () => window.clearTimeout(id);
+  }, [focusField, focusOn, scope]);
+}
+
+/**
  * Mission configuration.
  *
  * Everything in the top block feeds the range-to-fuel calculation, and every
@@ -34,9 +83,11 @@ export function MissionConfig() {
   const spec = useSim((s) => s.spec);
   const feas = useSim((s) => s.feas);
   const setField = useSim((s) => s.setField);
-  const resetField = useSim((s) => s.resetField);
   const refresh = useSim((s) => s.refreshFeasibility);
-  const [tab, setTab] = useState<"mission" | "launch" | "model">("mission");
+  const tab = useSim((s) => s.configTab);
+  const setTab = useSim((s) => s.setConfigTab);
+  const scope = useRef<HTMLDivElement>(null);
+  useFocusScroll(scope);
 
   useEffect(() => {
     void refresh({ solve_booster: true, rail_trade: true });
@@ -67,6 +118,7 @@ export function MissionConfig() {
       }
       scroll={tab !== "model"}
     >
+      <div ref={scope} className="contents">
       {tab === "model" ? (
         <ModelParams />
       ) : tab === "launch" ? (
@@ -74,65 +126,29 @@ export function MissionConfig() {
       ) : (
         <div className="pb-4">
           <SubHead>Profile</SubHead>
-          {(
-            [
-              ["mission.mission_distance_km", "Mission distance"],
-              ["mission.cruise_altitude_m", "Cruise altitude"],
-              ["mission.target_mach", "Target Mach"],
-              ["mission.climb_rate_ms", "Climb rate"],
-              ["mission.descent_rate_ms", "Descent rate"],
-              ["mission.descent_throttle", "Descent throttle"],
-              ["mission.end_altitude_m", "End altitude"],
-              ["mission.reserve_frac", "Fuel reserve"],
-            ] as const
-          ).map(([path, label]) => {
-            const m = meta(path);
-            const v = path.split(".").reduce<never>((a, k) => (a as never)[k], spec as never) as unknown as number;
-            return (
-              <Slider
-                key={path}
-                label={label}
-                unit={m.unit}
-                value={v}
-                min={m.min}
-                max={m.max}
-                step={m.step}
-                defaultValue={m.default}
-                onInput={(nv) => setField(path, nv)}
-                onReset={() => resetField(path)}
-                title={m.doc}
-              />
-            );
-          })}
+          {[
+            ["mission.mission_distance_km", "Mission distance"],
+            ["mission.cruise_altitude_m", "Cruise altitude"],
+            ["mission.target_mach", "Target Mach"],
+            ["mission.climb_rate_ms", "Climb rate"],
+            ["mission.descent_rate_ms", "Descent rate"],
+            ["mission.descent_throttle", "Descent throttle"],
+            ["mission.end_altitude_m", "End altitude"],
+            ["mission.reserve_frac", "Fuel reserve"],
+          ].map(([path, label]) => (
+            <Field key={path} path={path} label={label} />
+          ))}
 
           <SubHead>Mass</SubHead>
-          {(
-            [
-              ["airframe.mass_payload_kg", "Payload"],
-              ["airframe.fuel_capacity_kg", "Tank capacity"],
-              ["airframe.mass_airframe_kg", "Carbon airframe"],
-              ["airframe.mass_engine_kg", "Turbojet + mounts"],
-              ["airframe.mass_avionics_kg", "Avionics + battery"],
-            ] as const
-          ).map(([path, label]) => {
-            const m = meta(path);
-            const v = path.split(".").reduce<never>((a, k) => (a as never)[k], spec as never) as unknown as number;
-            return (
-              <Slider
-                key={path}
-                label={label}
-                unit={m.unit}
-                value={v}
-                min={m.min}
-                max={m.max}
-                step={m.step}
-                defaultValue={m.default}
-                onInput={(nv) => setField(path, nv)}
-                onReset={() => resetField(path)}
-                title={m.doc}
-              />
-            );
-          })}
+          {[
+            ["airframe.mass_payload_kg", "Payload"],
+            ["airframe.fuel_capacity_kg", "Tank capacity"],
+            ["airframe.mass_airframe_kg", "Carbon airframe"],
+            ["airframe.mass_engine_kg", "Turbojet + mounts"],
+            ["airframe.mass_avionics_kg", "Avionics + battery"],
+          ].map(([path, label]) => (
+            <Field key={path} path={path} label={label} />
+          ))}
           <Toggle
             label="Size fuel from range"
             checked={spec.mission.auto_fuel}
@@ -140,41 +156,17 @@ export function MissionConfig() {
             title="Off: set the fuel mass directly and read the range that results"
           />
           {!spec.mission.auto_fuel && (
-            <Slider
-              label="Fuel mass"
-              value={spec.mission.fuel_mass_kg}
-              {...meta("mission.fuel_mass_kg")}
-              onInput={(v) => setField("mission.fuel_mass_kg", v)}
-              onReset={() => resetField("mission.fuel_mass_kg")}
-            />
+            <Field path="mission.fuel_mass_kg" label="Fuel mass" />
           )}
 
           <SubHead>Atmosphere</SubHead>
-          {(
-            [
-              ["atmosphere.delta_isa_k", "Non-standard day"],
-              ["atmosphere.headwind_ms", "Headwind"],
-              ["atmosphere.ground_altitude_m", "Site elevation"],
-            ] as const
-          ).map(([path, label]) => {
-            const m = meta(path);
-            const v = path.split(".").reduce<never>((a, k) => (a as never)[k], spec as never) as unknown as number;
-            return (
-              <Slider
-                key={path}
-                label={label}
-                unit={m.unit}
-                value={v}
-                min={m.min}
-                max={m.max}
-                step={m.step}
-                defaultValue={m.default}
-                onInput={(nv) => setField(path, nv)}
-                onReset={() => resetField(path)}
-                title={m.doc}
-              />
-            );
-          })}
+          {[
+            ["atmosphere.delta_isa_k", "Non-standard day"],
+            ["atmosphere.headwind_ms", "Headwind"],
+            ["atmosphere.ground_altitude_m", "Site elevation"],
+          ].map(([path, label]) => (
+            <Field key={path} path={path} label={label} />
+          ))}
 
           <div className="mt-2 rule-t px-3 pt-2">
             <h3 className="tracked text-[10px] text-dim">Derived</h3>
@@ -216,6 +208,7 @@ export function MissionConfig() {
           </div>
         </div>
       )}
+      </div>
     </Panel>
   );
 }
@@ -224,8 +217,8 @@ function LaunchTab() {
   const spec = useSim((s) => s.spec);
   const feas = useSim((s) => s.feas);
   const setField = useSim((s) => s.setField);
-  const resetField = useSim((s) => s.resetField);
   const refresh = useSim((s) => s.refreshFeasibility);
+  const focusField = useSim((s) => s.focusField);
   const sol = feas?.booster_solution;
   const trade = feas?.rail_trade ?? [];
   const lf = feas?.launch;
@@ -238,32 +231,14 @@ function LaunchTab() {
   return (
     <div className="pb-4">
       <SubHead>Rail</SubHead>
-      {(
-        [
-          ["launch.rail_length_m", "Rail length"],
-          ["launch.rail_angle_deg", "Rail angle"],
-          ["launch.rail_friction_mu", "Carriage friction"],
-          ["launch.exit_margin", "Exit margin"],
-        ] as const
-      ).map(([path, label]) => {
-        const m = meta(path);
-        const v = path.split(".").reduce<never>((a, k) => (a as never)[k], spec as never) as unknown as number;
-        return (
-          <Slider
-            key={path}
-            label={label}
-            unit={m.unit}
-            value={v}
-            min={m.min}
-            max={m.max}
-            step={m.step}
-            defaultValue={m.default}
-            onInput={(nv) => setField(path, nv)}
-            onReset={() => resetField(path)}
-            title={m.doc}
-          />
-        );
-      })}
+      {[
+            ["launch.rail_length_m", "Rail length"],
+            ["launch.rail_angle_deg", "Rail angle"],
+            ["launch.rail_friction_mu", "Carriage friction"],
+            ["launch.exit_margin", "Exit margin"],
+          ].map(([path, label]) => (
+            <Field key={path} path={path} label={label} />
+          ))}
 
       <div className="px-3 pt-2">
         <div className="space-y-0.5">
@@ -304,37 +279,21 @@ function LaunchTab() {
         label="Booster fitted"
         checked={spec.launch.booster.enabled}
         onChange={(b) => setField("launch.booster.enabled", b)}
+        path="launch.booster.enabled"
+        highlight={focusField === "launch.booster.enabled"}
       />
       <Toggle
         label="Jettison at burnout"
         checked={spec.launch.booster.jettison}
         onChange={(b) => setField("launch.booster.jettison", b)}
       />
-      {(
-        [
-          ["launch.booster.thrust_n", "Booster thrust"],
-          ["launch.booster.burn_time_s", "Burn time"],
-          ["launch.booster.mass_kg", "Booster mass"],
-        ] as const
-      ).map(([path, label]) => {
-        const m = meta(path);
-        const v = path.split(".").reduce<never>((a, k) => (a as never)[k], spec as never) as unknown as number;
-        return (
-          <Slider
-            key={path}
-            label={label}
-            unit={m.unit}
-            value={v}
-            min={m.min}
-            max={m.max}
-            step={m.step}
-            defaultValue={m.default}
-            onInput={(nv) => setField(path, nv)}
-            onReset={() => resetField(path)}
-            title={m.doc}
-          />
-        );
-      })}
+      {[
+            ["launch.booster.thrust_n", "Booster thrust"],
+            ["launch.booster.burn_time_s", "Burn time"],
+            ["launch.booster.mass_kg", "Booster mass"],
+          ].map(([path, label]) => (
+            <Field key={path} path={path} label={label} />
+          ))}
       <div className="px-3">
         <Readout
           label="Total impulse"

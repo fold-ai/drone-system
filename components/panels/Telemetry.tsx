@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { type ChartSpec, resampleOnto, UPlotChart } from "@/components/charts/UPlotChart";
+import { EmptyState } from "@/components/panels/ErrorPanel";
 import { channelCss } from "@/lib/colormap";
 import { extent } from "@/lib/playback";
 import { useSim } from "@/lib/store";
@@ -122,13 +123,7 @@ export function Telemetry({ height }: { height: number }) {
     ];
   }, [run, ghost, showGhost]);
 
-  if (!run) {
-    return (
-      <div className="flex h-full items-center justify-center text-[11px] text-dim">
-        No trajectory. Press RUN.
-      </div>
-    );
-  }
+  if (!run) return <EmptyState where="charts" />;
 
   // Only the bottom chart carries the time axis; the four share one x scale, so
   // repeating it three more times would cost 60 px of trace height for nothing.

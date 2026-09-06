@@ -151,3 +151,14 @@ input[type="checkbox"]:checked { background: var(--color-bright); }
     transition-duration: 0.01ms !important;
   }
 }
+
+/* The only keyframe animation in the product: the solve progress wash. It is a
+   state indicator, not decoration, and reduced motion switches it off. */
+@keyframes act1-solve {
+  0% { transform: scaleX(0); opacity: 0.9; }
+  60% { transform: scaleX(1); opacity: 0.5; }
+  100% { transform: scaleX(1); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [style*="act1-solve"] { animation: none !important; opacity: 0.18 !important; transform: none !important; }
+}

@@ -15,6 +15,8 @@ import { FIELD_META, MODEL_PARAM_GROUPS } from "@/lib/types";
  */
 export function ModelParams() {
   const spec = useSim((s) => s.spec);
+  const ghost = useSim((s) => s.ghost);
+  const focusField = useSim((s) => s.focusField);
   const setField = useSim((s) => s.setField);
   const resetField = useSim((s) => s.resetField);
   const [open, setOpen] = useState<string | null>("Airframe");
@@ -68,7 +70,10 @@ export function ModelParams() {
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {groups.map((g) => {
-          const isOpen = open === g.title || filter.length > 0;
+          // A focused field forces its own group open, so a jump from a
+          // diagnostic lands on the control rather than a collapsed heading.
+          const holdsFocus = Boolean(focusField && focusField.startsWith(`${g.prefix}.`));
+          const isOpen = open === g.title || filter.length > 0 || holdsFocus;
           return (
             <div key={g.title} className="rule-b">
               <button
@@ -91,12 +96,15 @@ export function ModelParams() {
                           checked={Boolean(v)}
                           onChange={(b) => setField(f.path, b)}
                           title={f.doc}
+                          path={f.path}
+                          highlight={focusField === f.path}
                         />
                       );
                     }
                     if (typeof v !== "number") return null;
                     const min = f.min ?? Math.min(0, v * 2);
                     const max = f.max ?? Math.max(1, v * 2);
+                    const ref = ghost ? getPath(ghost.spec, f.path) : undefined;
                     return (
                       <Slider
                         key={f.path}
@@ -107,6 +115,9 @@ export function ModelParams() {
                         max={max}
                         step={f.step ?? (max - min) / 200}
                         defaultValue={typeof f.default === "number" ? f.default : undefined}
+                        reference={typeof ref === "number" ? ref : undefined}
+                        path={f.path}
+                        highlight={focusField === f.path}
                         onInput={(nv) => setField(f.path, nv)}
                         onReset={() => resetField(f.path)}
                         title={f.doc ? `${f.doc}  |  default ${f.default}` : undefined}

@@ -246,21 +246,61 @@ Single full-viewport shell, four regions, resizable dividers, no page scroll.
 - **Mission config**, left. Three tabs. `mission` carries the distance slider with
   live derived fuel, gross mass and stall speed; `launch` carries the rail, the
   feasibility verdict, the solved minimum booster and the rail-length trade;
-  `model` is the parameter drawer, generated from the Python dataclasses so a
-  constant cannot appear with a limit the solver has not agreed to.
-- **3D viewport**, centre. Rail at the configured length and angle, metric ground
-  grid, trajectory ribbon coloured by Mach with the flown part bright and the
-  path ahead dim, exhaust tied to actual throttle, booster plume and jettison.
-  Cameras chase, rail, side, top, orbit on keys 1 to 5. Attitude is the solved
-  flight-path angle and heading with no cosmetic banking. The Mach cone renders
-  only above M_dd.
+  `model` is the parameter drawer. Every control's range, step, unit and default
+  is generated from the Python dataclasses, so a control cannot offer a value
+  the solver has not agreed to. Fields accept a typed unit - "3.5 km" into a
+  metre field, "2.4 kN" into newtons, "85%" into a fraction - and clamp to the
+  model limits. Shift with the arrows gives a tenth of a step. A changed field
+  shows its delta from the held reference run.
+- **3D viewport**, centre. Rail at the configured length and angle, a metric grid
+  that follows the aircraft, range rings every 5 km, altitude posts every 10 km
+  ticked at 500 m, all faded by exponential fog. The airframe is held to a
+  40 px minimum by an exaggeration factor that is clamped at x8 and displayed;
+  past the cap a locator ring marks it. Fresnel rim and an inverted-hull outline
+  give it a silhouette against black. An attitude gnomon carries flight-path
+  angle, heading and bank. Cameras chase, rail, side, top, cockpit and orbit on
+  keys 1 to 6; drag orbits any of them, wheel zooms, R recentres. Attitude is the
+  solved flight-path angle and heading with no cosmetic banking.
 - **Aerodynamics**, right. Detaches into a real second browser window at `/aero`,
   synced over a `BroadcastChannel`, for a second monitor during a test review.
   The thrust-against-drag crossing plot is the one bold element on the screen.
-- **Bottom track**. Throttle lever, four uPlot charts, the editable throttle
-  schedule, and the scrub timeline with phase bands and event ticks.
+- **Bottom track**. Throttle lever, four uPlot charts, and a pane that switches
+  between the editable throttle schedule and the A/B table against the held
+  reference run.
+- **Below that**, the event strip - every flight event as a glyph and a time,
+  clickable to seek - and the scrub timeline with phase bands.
 
-Keys: space to play, arrows to step, Home and End, 1-5 for cameras.
+Warnings are grouped into blocking and advisory, and each row links to the
+instant it happened and to the controls that move it: a rail-exit failure jumps
+straight to the rail length and booster sliders. Panels collapse, split sizes
+persist, and "?" opens the keyboard map.
+
+### Colour
+
+One ramp, defined once in `lib/colormap.ts`, drives the 3D surface field, the
+streamlines, the trajectory ribbon, the chart traces and the panel swatches, so
+a colour means the same thing in every view:
+
+| | | |
+|---|---|---|
+| `#0B1F4B` | deep blue | low |
+| `#1E7FB5` | blue | |
+| `#21B5A8` | cyan-teal | |
+| `#4FC24A` | green | nominal |
+| `#E3D24A` | yellow | |
+| `#E8862E` | amber | limit |
+
+Chrome stays neutral. Red (`#FF3B1F`) is not part of the ramp and appears only
+for exceedance, always paired with a glyph so no state is carried by hue alone.
+The ramp is monotonic in lightness and separates on the blue-yellow axis, which
+is the axis red-green colour blindness leaves intact.
+
+The airframe carries a selectable surface field: a Cp estimate from potential
+flow over a sphere with a Prandtl-Glauert correction, local Mach derived from it,
+or freestream dynamic pressure. A colourbar always accompanies it with the
+domain, the units and the method. The streamlines are the analytic potential-flow
+solution for a sphere, labelled "illustrative flow, not CFD" in the toolbar,
+because a picture like that is easy to mistake for a Navier-Stokes result.
 
 ### Design
 

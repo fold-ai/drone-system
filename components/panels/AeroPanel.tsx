@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { feasibility } from "@/app/api-client";
 import { css } from "@/lib/colormap";
+import { EmptyState } from "@/components/panels/ErrorPanel";
 import { Panel } from "@/components/ui/Panel";
 import { fixed, sci, signed } from "@/lib/format";
 import { sampleAt } from "@/lib/playback";
@@ -24,7 +25,7 @@ export function AeroPanel({ detached = false }: { detached?: boolean }) {
   if (!run) {
     return (
       <Panel title="Aerodynamics">
-        <p className="p-3 text-[11px] text-dim">No trajectory. Press RUN.</p>
+        <EmptyState where="aero" />
       </Panel>
     );
   }

@@ -55,6 +55,17 @@ interface State {
   fieldMode: string;
   showStreamlines: boolean;
 
+  /** Round-trip times of the last few solves, newest last. Drives the sparkline. */
+  roundTrips: number[];
+  solveStartedAt: number | null;
+  /** Field the interface should scroll to and highlight, set by a diagnostic. */
+  focusField: string | null;
+  /** Configuration tab to show; a diagnostic can switch it. */
+  configTab: "mission" | "launch" | "model";
+  collapsed: { left: boolean; right: boolean; track: boolean };
+  keymapOpen: boolean;
+  diagnosticsOpen: boolean;
+
   setSpec: (patch: Partial<MissionSpec>) => void;
   setField: (path: string, value: number | boolean | string) => void;
   resetField: (path: string) => void;
@@ -78,6 +89,11 @@ interface State {
   setCamera: (c: CameraPreset) => void;
   setFieldMode: (m: string) => void;
   setShowStreamlines: (v: boolean) => void;
+  focusOn: (path: string | null) => void;
+  setConfigTab: (t: "mission" | "launch" | "model") => void;
+  toggleCollapsed: (which: "left" | "right" | "track") => void;
+  setKeymapOpen: (v: boolean) => void;
+  setDiagnosticsOpen: (v: boolean) => void;
   promoteToGhost: () => void;
   clearGhost: () => void;
   setAeroDetached: (v: boolean) => void;
@@ -180,6 +196,14 @@ export const useSim = create<State>((set, get) => ({
   fieldMode: "cp",
   showStreamlines: true,
 
+  roundTrips: [],
+  solveStartedAt: null,
+  focusField: null,
+  configTab: "mission",
+  collapsed: { left: false, right: false, track: false },
+  keymapOpen: false,
+  diagnosticsOpen: false,
+
   setSpec: (patch) => {
     set({ spec: { ...get().spec, ...patch } });
     void get().refreshFeasibility();
@@ -212,7 +236,7 @@ export const useSim = create<State>((set, get) => ({
   },
 
   run_: async () => {
-    set({ status: "solving", error: null, errorDetail: "" });
+    set({ status: "solving", error: null, errorDetail: "", solveStartedAt: Date.now() });
     try {
       const run = await solve(get().spec, { label: get().spec.label });
       set({
@@ -221,13 +245,20 @@ export const useSim = create<State>((set, get) => ({
         t: run.t0,
         playing: false,
         lastRoundTripMs: run.roundTripMs,
+        roundTrips: [...get().roundTrips, run.roundTripMs].slice(-3),
+        solveStartedAt: null,
         error: null,
       });
       publishRun(run);
       publishCursor(run.t0, false, get().speed);
     } catch (err) {
       const e = err as SolverError;
-      set({ status: "error", error: e.message ?? String(err), errorDetail: e.detail ?? "" });
+      set({
+        status: "error",
+        solveStartedAt: null,
+        error: e.message ?? String(err),
+        errorDetail: e.detail ?? "",
+      });
     }
   },
 
@@ -298,7 +329,13 @@ export const useSim = create<State>((set, get) => ({
     try {
       const tail = await solve(nextSpec, { resume, label: nextSpec.label });
       const merged = spliceRun(run, tail, resume.t);
-      set({ run: merged, spliceStatus: "idle", lastRoundTripMs: tail.roundTripMs, error: null });
+      set({
+        run: merged,
+        spliceStatus: "idle",
+        lastRoundTripMs: tail.roundTripMs,
+        roundTrips: [...get().roundTrips, tail.roundTripMs].slice(-3),
+        error: null,
+      });
       publishRun(merged);
     } catch (err) {
       const e = err as SolverError;
@@ -356,6 +393,12 @@ export const useSim = create<State>((set, get) => ({
   setCamera: (c) => set({ camera: c }),
   setFieldMode: (m) => set({ fieldMode: m }),
   setShowStreamlines: (v) => set({ showStreamlines: v }),
+  focusOn: (path) => set({ focusField: path }),
+  setConfigTab: (t) => set({ configTab: t }),
+  toggleCollapsed: (which) =>
+    set({ collapsed: { ...get().collapsed, [which]: !get().collapsed[which] } }),
+  setKeymapOpen: (v) => set({ keymapOpen: v }),
+  setDiagnosticsOpen: (v) => set({ diagnosticsOpen: v }),
   promoteToGhost: () => {
     const run = get().run;
     if (run) set({ ghost: { ...run, label: `${run.label} (ref)` }, showGhost: true });

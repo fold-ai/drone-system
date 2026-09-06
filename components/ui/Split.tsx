@@ -90,14 +90,81 @@ export function HDivider({ onDrag, onReset }: { onDrag: (dy: number) => void; on
   );
 }
 
-export function useResizable(initial: number, min: number, max: number) {
+/**
+ * Resizable region with its size remembered across sessions.
+ *
+ * The console is a workspace; having to re-drag the panels every time it loads
+ * is friction with no upside. Storage is best-effort: a private window or
+ * blocked site data just means the default, never a crash.
+ */
+export function useResizable(initial: number, min: number, max: number, key?: string) {
   const [size, setSize] = useState(initial);
-  const drag = useCallback(
-    (delta: number) => setSize((s) => Math.min(max, Math.max(min, s + delta))),
-    [min, max],
+
+  useEffect(() => {
+    if (!key) return;
+    try {
+      const raw = window.localStorage.getItem(`act1.layout.${key}`);
+      const v = raw === null ? NaN : Number.parseFloat(raw);
+      if (Number.isFinite(v)) setSize(Math.min(max, Math.max(min, v)));
+    } catch {
+      /* storage unavailable; the default stands */
+    }
+  }, [key, min, max]);
+
+  const persist = useCallback(
+    (v: number) => {
+      if (!key) return;
+      try {
+        window.localStorage.setItem(`act1.layout.${key}`, String(Math.round(v)));
+      } catch {
+        /* storage unavailable; the size still applies for this session */
+      }
+    },
+    [key],
   );
-  const reset = useCallback(() => setSize(initial), [initial]);
+
+  const drag = useCallback(
+    (delta: number) =>
+      setSize((s) => {
+        const v = Math.min(max, Math.max(min, s + delta));
+        persist(v);
+        return v;
+      }),
+    [min, max, persist],
+  );
+
+  const reset = useCallback(() => {
+    setSize(initial);
+    persist(initial);
+  }, [initial, persist]);
+
   return { size, drag, reset };
+}
+
+/** A one-click collapse handle sitting on a panel edge. */
+export function CollapseTab({
+  side,
+  collapsed,
+  onToggle,
+  label,
+}: {
+  side: "left" | "right" | "bottom";
+  collapsed: boolean;
+  onToggle: () => void;
+  label: string;
+}) {
+  const glyph =
+    side === "bottom" ? (collapsed ? "^" : "v") : side === "left" ? (collapsed ? ">" : "<") : collapsed ? "<" : ">";
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      title={`${collapsed ? "Show" : "Hide"} ${label}`}
+      className="hit num h-5 border border-rule bg-void px-1.5 text-[10px] text-dim hover:border-dim hover:text-bright"
+    >
+      {glyph}
+    </button>
+  );
 }
 
 export function Region({ children, className = "" }: { children: ReactNode; className?: string }) {
