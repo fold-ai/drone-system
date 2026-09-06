@@ -10,8 +10,41 @@ import { ensureFieldAttribute } from "./materials";
 
 const MODEL_URL = "/models/act1.glb";
 
-/** Parts the outline pass must leave alone: thin plates and anything inside a duct. */
-const NO_HULL = new Set(["spike", "tip_L", "tip_R", "fin_L", "fin_R", "nozzle"]);
+/**
+ * The export contract in public/models/README.md, as code.
+ *
+ * Matching is case-insensitive and substring-based so exporter suffixes like
+ * `ACT1_wing_R_001` still resolve. Anything unrecognised is treated as body,
+ * which is the safe default: it gets the field and an outline.
+ */
+const PART_PATTERNS: [RegExp, string][] = [
+  [/radome|nose|nosecone/i, "radome"],
+  [/spike|centrebody|centerbody/i, "spike"],
+  [/nozzle|exhaust/i, "nozzle"],
+  [/inlet|intake|duct/i, "inlet"],
+  [/engine|casing|nacelle/i, "engine"],
+  [/tip_[lr]|elevon|flap|aileron/i, "control"],
+  [/fin_[lr]|blade|strake/i, "fin"],
+  [/wing_[lr]|wing/i, "wing"],
+  [/body|fuselage|centre|center/i, "body"],
+];
+
+export function partOf(name: string): string {
+  for (const [re, part] of PART_PATTERNS) if (re.test(name)) return part;
+  return "body";
+}
+
+/**
+ * Parts the outline pass must leave alone.
+ *
+ * The shell is grown along the surface normals. Run over the inlet centrebody it
+ * produces a shell wider than the lip, and the spike vanishes inside its own
+ * outline. Thin plates have no volume for a shell to grow into at all.
+ */
+const NO_HULL = new Set(["spike", "control", "fin", "nozzle"]);
+
+/** Parts drawn in the paler accent material rather than carrying the field. */
+const ACCENT = new Set(["spike", "control"]);
 
 export type AirframeSource = "cad" | "parametric";
 
@@ -64,20 +97,24 @@ function CadAirframe({
     root.position.sub(centre.multiplyScalar(k));
 
     const shells: { mesh: THREE.Mesh; parent: THREE.Object3D }[] = [];
+    const found = new Set<string>();
     root.traverse((o) => {
       const m = o as THREE.Mesh;
       if (!m.isMesh || !m.geometry) return;
       ensureFieldAttribute(m.geometry);
-      const name = m.name || "";
-      const isAccent = /spike|centrebody|tip_|elevon|flap/i.test(name);
-      m.material = isAccent ? accent : material;
-      if (!NO_HULL.has(name) && !/spike|centrebody/i.test(name)) {
+      const part = partOf(m.name || "");
+      found.add(part);
+      m.userData.part = part;
+      m.material = ACCENT.has(part) ? accent : material;
+      if (!NO_HULL.has(part)) {
         const shell = new THREE.Mesh(m.geometry, hull);
         shell.renderOrder = -1;
+        shell.userData.part = part;
         shells.push({ mesh: shell, parent: m.parent ?? root });
       }
     });
     shells.forEach(({ mesh, parent }) => parent.add(mesh));
+    root.userData.parts = [...found].sort();
     return root;
   }, [scene, lengthM, material, accent, hull]);
 
@@ -115,14 +152,17 @@ function ParametricAirframe({
 
   return (
     <group>
-      {parts.map((p) => (
-        <group key={p.name} name={p.name}>
-          <mesh geometry={p.geometry} material={p.accent ? accent : material} />
-          {!NO_HULL.has(p.name) && (
-            <mesh geometry={p.geometry} material={hull} renderOrder={-1} />
-          )}
-        </group>
-      ))}
+      {parts.map((p) => {
+        const part = partOf(p.name);
+        return (
+          <group key={p.name} name={p.name} userData={{ part }}>
+            <mesh geometry={p.geometry} material={ACCENT.has(part) ? accent : material} />
+            {!NO_HULL.has(part) && (
+              <mesh geometry={p.geometry} material={hull} renderOrder={-1} />
+            )}
+          </group>
+        );
+      })}
     </group>
   );
 }

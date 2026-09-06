@@ -621,6 +621,87 @@ def test_span_load_is_bounded_and_departs_from_elliptical():
     note(f"Schrenk span load departs from elliptical by {worst.departure * 100:+.0f}% at "
          f"eta {worst.eta:.2f}; this is an approximation, not a lifting-line solve")
 
+
+def test_glb_contract_checker_accepts_a_conforming_export():
+    """The export contract in public/models/README.md, exercised end to end.
+
+    A synthetic GLB carrying the contract part names is written, validated, and
+    the part resolution is checked against what the viewport does with the same
+    names. No mesh is shipped: the real one is the CAD export."""
+    import json
+    import struct
+    import subprocess
+    import tempfile
+
+    parts = ["radome", "body", "wing_L", "wing_R", "tip_L", "tip_R",
+             "inlet", "engine", "spike", "nozzle"]
+    accessors, views, meshes, nodes, blobs = [], [], [], [], []
+    offset = 0
+    for i, name in enumerate(parts):
+        x = -1.0 + 2.0 * i / (len(parts) - 1)
+        v = [(x, 0.0, -0.15), (x + 0.18, 0.0, 0.0), (x, 0.0, 0.15)]
+        vb = b"".join(struct.pack("<3f", *p) for p in v)
+        nb = b"".join(struct.pack("<3f", 0.0, 1.0, 0.0) for _ in v)
+        ib = struct.pack("<3H", 0, 1, 2) + b"\x00\x00"
+        for blob, target, ctype, comp, mn, mx, ln in (
+                (vb, 34962, "VEC3", 5126, [x, 0.0, -0.15], [x + 0.18, 0.0, 0.15], len(vb)),
+                (nb, 34962, "VEC3", 5126, [0.0, 1.0, 0.0], [0.0, 1.0, 0.0], len(nb)),
+                (ib, 34963, "SCALAR", 5123, [0], [2], 6)):
+            views.append({"buffer": 0, "byteOffset": offset, "byteLength": ln, "target": target})
+            accessors.append({"bufferView": len(views) - 1, "componentType": comp,
+                              "count": 3, "type": ctype, "min": mn, "max": mx})
+            blobs.append(blob)
+            offset += len(blob)
+        base = len(accessors) - 3
+        meshes.append({"name": name, "primitives": [
+            {"attributes": {"POSITION": base, "NORMAL": base + 1},
+             "indices": base + 2, "mode": 4}]})
+        nodes.append({"name": name, "mesh": len(meshes) - 1})
+
+    buf = b"".join(blobs)
+    gltf = {"asset": {"version": "2.0", "generator": "act1 contract test"},
+            "scene": 0, "scenes": [{"nodes": list(range(len(nodes)))}],
+            "nodes": nodes, "meshes": meshes, "accessors": accessors,
+            "bufferViews": views, "buffers": [{"byteLength": len(buf)}]}
+    js = json.dumps(gltf, separators=(",", ":")).encode()
+    js += b" " * ((4 - len(js) % 4) % 4)
+    buf += b"\x00" * ((4 - len(buf) % 4) % 4)
+    glb = (b"glTF" + struct.pack("<II", 2, 12 + 8 + len(js) + 8 + len(buf))
+           + struct.pack("<II", len(js), 0x4E4F534A) + js
+           + struct.pack("<II", len(buf), 0x004E4942) + buf)
+
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "act1.glb")
+        with open(path, "wb") as fh:
+            fh.write(glb)
+        res = subprocess.run([sys.executable, os.path.join(root, "scripts", "check_glb.py"), path],
+                             capture_output=True, text=True)
+        assert res.returncode == 0, res.stdout + res.stderr
+        assert "contract satisfied" in res.stdout
+
+        sys.path.insert(0, os.path.join(root, "scripts"))
+        import check_glb
+        assert check_glb.resolve("ACT1_wing_R_001") == "wing"
+        assert check_glb.resolve("Nose_Cone") == "radome"
+        assert check_glb.resolve("centrebody_spike") == "spike"
+        assert check_glb.resolve("something_unlabelled") == "body"
+    note(f"GLB contract: {len(parts)} named parts validated, exporter suffixes resolve, "
+         f"unrecognised names fall back to body")
+
+
+def test_absent_mesh_is_a_supported_state_not_a_failure():
+    import subprocess
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+    res = subprocess.run(
+        [sys.executable, os.path.join(root, "scripts", "check_glb.py"),
+         os.path.join(root, "public", "models", "act1.glb")],
+        capture_output=True, text=True)
+    assert res.returncode == 0
+    assert "parametric airframe" in res.stdout or "absent" in res.stdout
+    note("With no CAD mesh present the checker reports the parametric fallback rather "
+         "than failing")
+
 # ==========================================================================
 
 def main() -> int:
