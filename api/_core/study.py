@@ -378,34 +378,34 @@ def sensitivity(spec: MissionSpec, paths: Optional[List[str]] = None,
 COST_OF: Dict[str, Tuple[str, str]] = {
     "airframe.aspect_ratio": (
         "span, structure and rail clearance",
-        "assumes unchanged Oswald efficiency and reference area, and that the wider span "
-        "still clears the launch rail",
+        "unchanged Oswald efficiency and reference area, and that the wider span still "
+        "clears the launch rail",
     ),
     "airframe.cd0_sub": (
         "surface finish, sealing and joint quality",
-        "assumes the drag reduction is achievable without adding mass or changing the "
-        "reference area",
+        "the drag reduction is achievable without adding mass or changing the reference "
+        "area",
     ),
     "airframe.oswald_e": (
         "planform and twist work",
-        "assumes the span load can be moved toward elliptical without a structural or "
-        "mass penalty",
+        "the span load can be moved toward elliptical without a structural or mass "
+        "penalty",
     ),
     "airframe.mach_dd": (
         "aerofoil and area-rule work",
-        "assumes the divergence Mach can be pushed out without raising subsonic CD0",
+        "the divergence Mach can be pushed out without raising subsonic CD0",
     ),
     "airframe.dcd_wave": (
         "transonic shaping",
-        "assumes the wave drag increment falls without moving the divergence Mach",
+        "the wave drag increment falls without moving the divergence Mach",
     ),
     "airframe.cl_max": (
         "high-lift or planform work",
-        "affects launch and stall margin rather than cruise drag",
+        "the change affects launch and stall margin rather than cruise drag",
     ),
     "airframe.mass_payload_kg": (
         "payload capability given up",
-        "assumes the mass comes out without changing the balance",
+        "the mass comes out without changing the balance",
     ),
 }
 
@@ -430,7 +430,7 @@ def _improvements(spec: MissionSpec, rows: List[SensitivityRow],
             to_v, gain = r.low, down
         if gain <= 0.05:
             continue
-        cost, assumption = COST_OF.get(r.path, ("unquantified", "assumes no side effects"))
+        cost, assumption = COST_OF.get(r.path, ("unquantified", "no side effects"))
         detail = assumption
         if r.path == "airframe.aspect_ratio":
             span_now = spec.airframe.span_m

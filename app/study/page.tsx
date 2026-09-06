@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { DragBreakdown } from "@/components/study/DragBreakdown";
 import { PolarChart } from "@/components/study/PolarChart";
 import { Sensitivity } from "@/components/study/Sensitivity";
+import { Improvements } from "@/components/study/Improvements";
 import { SweepExplorer } from "@/components/study/SweepExplorer";
 import { StudyControls } from "@/components/study/StudyControls";
 import { Brand } from "@/components/ui/Brand";
@@ -94,7 +95,7 @@ export default function Study() {
 
         <VDivider onDrag={(dx) => right.drag(-dx)} onReset={right.reset} />
         <div style={{ width: right.size }} className="flex min-h-0 shrink-0 flex-col rule-l">
-          <div className="p-3 text-[11px] text-dim">Results panel.</div>
+          <Improvements />
         </div>
       </div>
     </main>
