@@ -4,11 +4,18 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useGLTF } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
+import type { Planform, PlanformSpec } from "@/lib/types";
+import { buildAct1, disposeParts } from "./geometry";
 import { ensureFieldAttribute } from "./materials";
 
 const MODEL_URL = "/models/act1.glb";
 
-/** True once the airframe model has been confirmed present. */
+/** Parts the outline pass must leave alone: thin plates and anything inside a duct. */
+const NO_HULL = new Set(["spike", "tip_L", "tip_R", "fin_L", "fin_R", "nozzle"]);
+
+export type AirframeSource = "cad" | "parametric";
+
+/** True once the CAD mesh has been confirmed present. */
 export function useModelAvailable(): boolean | null {
   const [ok, setOk] = useState<boolean | null>(null);
   useEffect(() => {
@@ -23,23 +30,28 @@ export function useModelAvailable(): boolean | null {
   return ok;
 }
 
-/** Every geometry in the airframe, so the field colouring can address them. */
-export type GeometrySink = (geometries: THREE.BufferGeometry[]) => void;
-
-function GlbAirframe({
+/**
+ * CAD mesh.
+ *
+ * Named parts from the export contract in public/models/README.md are honoured
+ * when present, so the field shader can address the radome, the wing and the
+ * engine separately. An unnamed single mesh still loads; it just colours as one
+ * surface.
+ */
+function CadAirframe({
   lengthM,
   material,
+  accent,
   hull,
-  onGeometries,
 }: {
   lengthM: number;
   material: THREE.Material;
+  accent: THREE.Material;
   hull: THREE.Material;
-  onGeometries?: GeometrySink;
 }) {
   const { scene } = useGLTF(MODEL_URL);
 
-  const { model, geometries } = useMemo(() => {
+  const model = useMemo(() => {
     const root = scene.clone(true);
     const box = new THREE.Box3().setFromObject(root);
     const size = new THREE.Vector3();
@@ -51,101 +63,66 @@ function GlbAirframe({
     box.getCenter(centre);
     root.position.sub(centre.multiplyScalar(k));
 
-    const geos: THREE.BufferGeometry[] = [];
-    const hulls: THREE.Mesh[] = [];
+    const shells: { mesh: THREE.Mesh; parent: THREE.Object3D }[] = [];
     root.traverse((o) => {
       const m = o as THREE.Mesh;
       if (!m.isMesh || !m.geometry) return;
       ensureFieldAttribute(m.geometry);
-      m.material = material;
-      geos.push(m.geometry);
-      const shell = new THREE.Mesh(m.geometry, hull);
-      shell.renderOrder = -1;
-      hulls.push(shell);
+      const name = m.name || "";
+      const isAccent = /spike|centrebody|tip_|elevon|flap/i.test(name);
+      m.material = isAccent ? accent : material;
+      if (!NO_HULL.has(name) && !/spike|centrebody/i.test(name)) {
+        const shell = new THREE.Mesh(m.geometry, hull);
+        shell.renderOrder = -1;
+        shells.push({ mesh: shell, parent: m.parent ?? root });
+      }
     });
-    hulls.forEach((h, i) => {
-      const src = geos[i];
-      const owner = root.getObjectByProperty("geometry", src as never);
-      (owner?.parent ?? root).add(h);
-      if (owner) h.applyMatrix4(owner.matrix);
-    });
-    return { model: root, geometries: geos };
-  }, [scene, lengthM, material, hull]);
+    shells.forEach(({ mesh, parent }) => parent.add(mesh));
+    return root;
+  }, [scene, lengthM, material, accent, hull]);
 
-  useEffect(() => onGeometries?.(geometries), [geometries, onGeometries]);
   return <primitive object={model} />;
 }
 
 /**
- * Procedural blended delta used when the GLB is absent. Same span and length as
- * the configured airframe, and labelled as a placeholder wherever it is shown.
+ * Parametric airframe.
+ *
+ * Lofted from the planform stations the solver publishes, so span, length,
+ * sweep, crank, thickness and twist in the specification all move the shape on
+ * screen. It is built from the specification, not measured from the CAD, and the
+ * viewport badge says so.
  */
-function PlaceholderAirframe({
-  lengthM,
-  spanM,
+function ParametricAirframe({
+  planform,
+  planformSpec,
   material,
+  accent,
   hull,
-  onGeometries,
 }: {
-  lengthM: number;
-  spanM: number;
+  planform: Planform;
+  planformSpec: PlanformSpec;
   material: THREE.Material;
+  accent: THREE.Material;
   hull: THREE.Material;
-  onGeometries?: GeometrySink;
 }) {
   const parts = useMemo(() => {
-    const L = lengthM;
-    const b = spanM / 2;
+    const built = buildAct1(planform, planformSpec);
+    built.forEach((p) => ensureFieldAttribute(p.geometry));
+    return built;
+  }, [planform, planformSpec]);
 
-    const shape = new THREE.Shape();
-    shape.moveTo(L * 0.5, 0);
-    shape.lineTo(-L * 0.34, b);
-    shape.lineTo(-L * 0.5, b * 0.62);
-    shape.lineTo(-L * 0.5, -b * 0.62);
-    shape.lineTo(-L * 0.34, -b);
-    shape.closePath();
-    const wing = new THREE.ExtrudeGeometry(shape, { depth: L * 0.045, bevelEnabled: false });
-    wing.translate(0, 0, -L * 0.0225);
-    wing.rotateX(-Math.PI / 2);
-    wing.computeVertexNormals();
-
-    const body = new THREE.CylinderGeometry(L * 0.07, L * 0.075, L * 0.62, 18);
-    body.rotateZ(Math.PI / 2);
-    body.translate(L * 0.18, 0, 0);
-
-    const nose = new THREE.ConeGeometry(L * 0.07, L * 0.2, 18);
-    nose.rotateZ(-Math.PI / 2);
-    nose.translate(L * 0.59, 0, 0);
-
-    const fin = new THREE.BoxGeometry(L * 0.2, L * 0.16, L * 0.012);
-    fin.translate(-L * 0.4, L * 0.11, 0);
-
-    const all = [wing, body, nose, fin];
-    all.forEach(ensureFieldAttribute);
-    return all;
-  }, [lengthM, spanM]);
-
-  const edges = useMemo(() => new THREE.EdgesGeometry(parts[0], 20), [parts]);
-
-  useEffect(() => {
-    onGeometries?.(parts);
-    return () => {
-      parts.forEach((g) => g.dispose());
-      edges.dispose();
-    };
-  }, [parts, edges, onGeometries]);
+  useEffect(() => () => disposeParts(parts), [parts]);
 
   return (
     <group>
-      {parts.map((g, i) => (
-        <group key={i}>
-          <mesh geometry={g} material={material} />
-          <mesh geometry={g} material={hull} renderOrder={-1} />
+      {parts.map((p) => (
+        <group key={p.name} name={p.name}>
+          <mesh geometry={p.geometry} material={p.accent ? accent : material} />
+          {!NO_HULL.has(p.name) && (
+            <mesh geometry={p.geometry} material={hull} renderOrder={-1} />
+          )}
         </group>
       ))}
-      <lineSegments geometry={edges}>
-        <lineBasicMaterial color="#ffffff" transparent opacity={0.55} />
-      </lineSegments>
     </group>
   );
 }
@@ -157,18 +134,20 @@ function PlaceholderAirframe({
  */
 export function Act1({
   lengthM,
-  spanM,
-  hasModel,
+  source,
+  planform,
+  planformSpec,
   material,
+  accent,
   hull,
-  onGeometries,
 }: {
   lengthM: number;
-  spanM: number;
-  hasModel: boolean;
+  source: AirframeSource;
+  planform: Planform | null;
+  planformSpec: PlanformSpec;
   material: THREE.ShaderMaterial;
+  accent: THREE.ShaderMaterial;
   hull: THREE.ShaderMaterial;
-  onGeometries?: GeometrySink;
 }) {
   const exhaust = useRef<THREE.Mesh>(null);
   const exhaustMat = useRef<THREE.MeshBasicMaterial>(null);
@@ -184,29 +163,24 @@ export function Act1({
 
   return (
     <group>
-      {hasModel ? (
-        <GlbAirframe
-          lengthM={lengthM}
+      {source === "cad" ? (
+        <CadAirframe lengthM={lengthM} material={material} accent={accent} hull={hull} />
+      ) : planform ? (
+        <ParametricAirframe
+          planform={planform}
+          planformSpec={planformSpec}
           material={material}
+          accent={accent}
           hull={hull}
-          onGeometries={onGeometries}
         />
-      ) : (
-        <PlaceholderAirframe
-          lengthM={lengthM}
-          spanM={spanM}
-          material={material}
-          hull={hull}
-          onGeometries={onGeometries}
-        />
-      )}
+      ) : null}
       <mesh
         ref={exhaust}
         name="exhaust"
-        position={[-lengthM * 0.56, 0, 0]}
+        position={[-lengthM * 0.5, lengthM * 0.05, 0]}
         rotation={[0, 0, Math.PI / 2]}
       >
-        <coneGeometry args={[lengthM * 0.055, lengthM * 0.5, 14, 1, true]} />
+        <coneGeometry args={[lengthM * 0.05, lengthM * 0.5, 14, 1, true]} />
         <meshBasicMaterial
           ref={exhaustMat}
           color="#8FD8FF"

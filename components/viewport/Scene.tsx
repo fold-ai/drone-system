@@ -53,14 +53,16 @@ function usePrefersReducedMotion(): boolean {
 }
 
 function Aircraft({
-  hasModel,
+  source,
   material,
+  accent,
   hull,
   onScale,
   onLocator,
 }: {
-  hasModel: boolean;
+  source: "cad" | "parametric";
   material: THREE.ShaderMaterial;
+  accent: THREE.ShaderMaterial;
   hull: THREE.ShaderMaterial;
   onScale: (factor: number) => void;
   onLocator: (x: number, y: number, visible: boolean) => void;
@@ -71,6 +73,7 @@ function Aircraft({
   const booster = useRef<THREE.Group>(null);
   const jettisoned = useRef<THREE.Group>(null);
   const spec = useSim((s) => s.spec);
+  const planform = useSim((s) => s.feas?.planform ?? null);
   const showStreamlines = useSim((s) => s.showStreamlines);
   const reduced = usePrefersReducedMotion();
   const { camera, size } = useThree();
@@ -128,7 +131,6 @@ function Aircraft({
     if (right.lengthSq() < 1e-6) right.set(1, 0, 0);
     up.crossVectors(right, toCam).normalize();
     light.copy(toCam).addScaledVector(right, 0.55).addScaledVector(up, 0.75).normalize();
-    material.uniforms.uLightDir.value.copy(light);
 
     const ex = g.getObjectByName("exhaust");
     if (ex) ex.userData.throttle = s.throttle_act;
@@ -138,13 +140,16 @@ function Aircraft({
 
     // --- surface field -------------------------------------------------
     const mode = FIELD_MODES.find((f) => f.key === useSim.getState().fieldMode) ?? FIELD_MODES[0];
-    const u = material.uniforms;
-    u.uFieldMode.value = mode.id;
-    u.uFieldMix.value = mode.id === 0 ? 0 : 1;
-    u.uMach.value = s.mach;
-    u.uQ.value = s.q_pa;
-    u.uQMax.value = Math.max(1000, run.summary.max_q_pa);
-    u.uMachDd.value = spec.airframe.mach_dd;
+    for (const mat of [material, accent]) {
+      const u = mat.uniforms;
+      u.uFieldMode.value = mode.id;
+      u.uFieldMix.value = mode.id === 0 ? 0 : 1;
+      u.uMach.value = s.mach;
+      u.uQ.value = s.q_pa;
+      u.uQMax.value = Math.max(1000, run.summary.max_q_pa);
+      u.uMachDd.value = spec.airframe.mach_dd;
+      u.uLightDir.value.copy(light);
+    }
 
     const b = spec.launch.booster;
     const burning = b.enabled && t < b.burn_time_s;
@@ -177,9 +182,11 @@ function Aircraft({
         <group ref={model}>
           <Act1
             lengthM={L}
-            spanM={spec.airframe.span_m}
-            hasModel={hasModel}
+            source={source}
+            planform={planform}
+            planformSpec={spec.airframe.planform}
             material={material}
+            accent={accent}
             hull={hull}
           />
           <group ref={cone}>
@@ -262,7 +269,9 @@ function CameraRig() {
       lookAhead = 4000;
       tau = 0.06;
     } else {
-      offset.set(-34, 14, 30);
+      // Orbit is the inspection camera: it starts close enough to read the
+      // planform and zooms in far enough to look at the inlet.
+      offset.set(-4.2 * L, 1.9 * L, 3.4 * L);
     }
 
     // User orbit, applied around the look point (or around the view direction
@@ -320,13 +329,18 @@ export function Scene() {
   const scaleTag = useRef<HTMLSpanElement>(null);
 
   const material = useMemo(() => makeAirframeMaterial(), []);
+  // Control surfaces and the centrebody spike read paler than the body, which
+  // is how they read in the CAD plan view.
+  const accent = useMemo(() => makeAirframeMaterial({ base: "#6E7782" }), []);
   const hull = useMemo(() => makeHullMaterial(), []);
+  const source: "cad" | "parametric" = hasModel === true ? "cad" : "parametric";
   useEffect(
     () => () => {
       material.dispose();
+      accent.dispose();
       hull.dispose();
     },
-    [material, hull],
+    [material, accent, hull],
   );
 
   const onScale = useCallback((factor: number) => {
@@ -348,7 +362,14 @@ export function Scene() {
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
     dragging.current = { x: e.clientX, y: e.clientY };
-    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+    try {
+      // Throws when the pointer id is not active, which a synthetic event or a
+      // pointer already released underneath us will produce. Capture is a
+      // convenience here, not a requirement.
+      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+    } catch {
+      /* drag still tracks through the window listeners */
+    }
   };
   const onPointerMove = (e: React.PointerEvent) => {
     const d = dragging.current;
@@ -379,7 +400,7 @@ export function Scene() {
       onPointerUp={endDrag}
       onPointerLeave={endDrag}
       onWheel={(e) => {
-        orbit.zoom = Math.min(8, Math.max(0.25, orbit.zoom * (e.deltaY > 0 ? 1.12 : 0.89)));
+        orbit.zoom = Math.min(12, Math.max(0.12, orbit.zoom * (e.deltaY > 0 ? 1.12 : 0.89)));
       }}
     >
       <Canvas
@@ -399,8 +420,9 @@ export function Scene() {
         />
         <Suspense fallback={null}>
           <Aircraft
-            hasModel={hasModel === true}
+            source={source}
             material={material}
+            accent={accent}
             hull={hull}
             onScale={onScale}
             onLocator={onLocator}
@@ -475,11 +497,21 @@ export function Scene() {
           <div className="max-w-[420px]">
             <GeometryCheck compact />
           </div>
-          {hasModel === false && (
-            <div className="border border-rule bg-void/85 px-2 py-1 text-[10px] text-dim">
-              Placeholder airframe. Drop act1.glb into /public/models/ for the real geometry.
-            </div>
-          )}
+          <div
+            className="border border-rule bg-void/85 px-2 py-1 text-[10px] text-dim"
+            title={
+              source === "cad"
+                ? "Surface is the exported CAD mesh from /public/models/act1.glb"
+                : "Surface is lofted from the specification, not measured from the CAD. Drop act1.glb into /public/models/ to show the exported mesh instead."
+            }
+          >
+            <span className="num text-bright">
+              {source === "cad" ? "CAD mesh" : "parametric airframe"}
+            </span>{" "}
+            {source === "cad"
+              ? "act1.glb, scaled to the spec length"
+              : "lofted from the specification, not CAD-exact"}
+          </div>
         </div>
       </div>
     </div>

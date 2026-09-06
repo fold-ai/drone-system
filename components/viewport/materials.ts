@@ -219,7 +219,7 @@ export function makeHullMaterial(colour = "#FFFFFF", opacity = 0.4): THREE.Shade
     uniforms: {
       uColour: { value: new THREE.Color(colour) },
       uOpacity: { value: opacity },
-      uGrow: { value: 0.045 },
+      uGrow: { value: 0.032 },
     },
     vertexShader: /* glsl */ `
       #include <common>
