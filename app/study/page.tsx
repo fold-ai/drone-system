@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { DragBreakdown } from "@/components/study/DragBreakdown";
+import { PolarChart } from "@/components/study/PolarChart";
 import { StudyControls } from "@/components/study/StudyControls";
 import { Brand } from "@/components/ui/Brand";
 import { useResizable, VDivider } from "@/components/ui/Split";
@@ -78,6 +79,9 @@ export default function Study() {
 
         <div className="min-w-0 flex-1 overflow-y-auto">
           <DragBreakdown />
+          <div className="rule-t">
+            <PolarChart />
+          </div>
         </div>
 
         <VDivider onDrag={(dx) => right.drag(-dx)} onReset={right.reset} />

@@ -209,8 +209,10 @@ function niceStep(range: number, target: number): number {
 }
 
 function fmt(v: number): string {
-  if (Math.abs(v) >= 1000) return v.toFixed(0);
-  if (Math.abs(v) >= 10) return v.toFixed(0);
-  if (Math.abs(v) >= 1) return v.toFixed(1);
+  const a = Math.abs(v);
+  if (a < 1e-9) return "0";
+  if (a >= 1000) return v.toFixed(0);
+  if (a >= 10) return v.toFixed(0);
+  if (a >= 1) return v.toFixed(1);
   return v.toFixed(2);
 }
