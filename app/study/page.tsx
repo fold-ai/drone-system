@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { DragBreakdown } from "@/components/study/DragBreakdown";
 import { PolarChart } from "@/components/study/PolarChart";
 import { Sensitivity } from "@/components/study/Sensitivity";
+import { SweepExplorer } from "@/components/study/SweepExplorer";
 import { StudyControls } from "@/components/study/StudyControls";
 import { Brand } from "@/components/ui/Brand";
 import { useResizable, VDivider } from "@/components/ui/Split";
@@ -85,6 +86,9 @@ export default function Study() {
           </div>
           <div className="rule-t">
             <Sensitivity />
+          </div>
+          <div className="rule-t">
+            <SweepExplorer />
           </div>
         </div>
 
