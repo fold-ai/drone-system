@@ -55,7 +55,7 @@ export default function Console() {
       <KeyMap />
 
       <header className="flex h-11 shrink-0 items-center gap-4 rule-b bg-panel px-3">
-        <Brand />
+        <Brand nav="console" />
         <span className="num text-[11px] text-dim">
           {spec.label} &middot; {spec.config_name}
         </span>

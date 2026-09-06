@@ -11,6 +11,8 @@ import type {
   MissionSpec,
   ResumeState,
   SimulationResponse,
+  StudyOp,
+  StudyResponse,
 } from "@/lib/types";
 import { type Run, toRun } from "@/lib/playback";
 
@@ -69,6 +71,42 @@ export interface FeasibilityOptions {
   sweep_altitude_m?: number;
   sweep_mass_kg?: number;
   target_margin?: number;
+}
+
+/**
+ * Airframe study.
+ *
+ * Results are cached by the exact request, because a sweep costs hundreds of
+ * solves and the study page re-renders far more often than its inputs change.
+ * The cache is per session and bounded; it holds analysis, not state.
+ */
+const studyCache = new Map<string, StudyResponse>();
+const STUDY_CACHE_LIMIT = 40;
+
+export function studyCacheKey(spec: MissionSpec, op: StudyOp, args: unknown): string {
+  return JSON.stringify({ op, args, spec: { ...spec, resume: null } });
+}
+
+export function peekStudy(key: string): StudyResponse | undefined {
+  return studyCache.get(key);
+}
+
+export async function study(
+  spec: MissionSpec,
+  op: StudyOp,
+  args: Record<string, unknown> = {},
+  signal?: AbortSignal,
+): Promise<StudyResponse> {
+  const key = studyCacheKey(spec, op, args);
+  const hit = studyCache.get(key);
+  if (hit) return hit;
+  const res = await post<StudyResponse>("/api/study", { ...spec, resume: null, op, args }, signal);
+  if (studyCache.size >= STUDY_CACHE_LIMIT) {
+    const oldest = studyCache.keys().next().value;
+    if (oldest !== undefined) studyCache.delete(oldest);
+  }
+  studyCache.set(key, res);
+  return res;
 }
 
 /** Sizing, launch feasibility and the performance envelope, with no trajectory

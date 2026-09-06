@@ -22,9 +22,14 @@ sys.path.insert(0, os.path.join(ROOT, "api"))
 
 import feasibility as feasibility_route          # noqa: E402
 import simulate as simulate_route                # noqa: E402
+import study as study_route                      # noqa: E402
 from _core.httputil import read_json, send, send_error_json   # noqa: E402
 
-ROUTES = {"/api/simulate": simulate_route, "/api/feasibility": feasibility_route}
+ROUTES = {
+    "/api/simulate": simulate_route,
+    "/api/feasibility": feasibility_route,
+    "/api/study": study_route,
+}
 
 
 class Handler(BaseHTTPRequestHandler):

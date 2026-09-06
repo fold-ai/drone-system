@@ -9,7 +9,14 @@ const LOGO = "/brand/actprove.svg";
  * white on black. Uses the supplied SVG when it is present and falls back to
  * the mark drawn inline so the console never ships a broken image.
  */
-export function Brand({ product = "ACT-1 SIM" }: { product?: string | null }) {
+export function Brand({
+  product = "ACT-1 SIM",
+  nav,
+}: {
+  product?: string | null;
+  /** Which page is showing, so the link points at the other one. */
+  nav?: "console" | "study";
+}) {
   const [hasSvg, setHasSvg] = useState<boolean | null>(null);
   useEffect(() => {
     let alive = true;
@@ -39,6 +46,19 @@ export function Brand({ product = "ACT-1 SIM" }: { product?: string | null }) {
       )}
       {product && (
         <span className="tracked text-[11px] font-semibold text-bright">{product}</span>
+      )}
+      {nav && (
+        <a
+          href={nav === "console" ? "/study" : "/"}
+          className="hit border border-rule px-1.5 py-0.5 text-[10px] text-dim hover:border-dim hover:text-bright"
+          title={
+            nav === "console"
+              ? "Airframe study: drag breakdown, sensitivity and sweeps"
+              : "Back to the flight console"
+          }
+        >
+          {nav === "console" ? "airframe study" : "console"}
+        </a>
       )}
     </span>
   );

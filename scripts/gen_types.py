@@ -27,6 +27,7 @@ from _core import derived as derived_mod          # noqa: E402
 from _core import encode as encode_mod            # noqa: E402
 from _core import engine as engine_mod            # noqa: E402
 from _core import planform as planform_mod       # noqa: E402
+from _core import study as study_mod             # noqa: E402
 from _core import schema as schema_mod            # noqa: E402
 from _core.dynamics import COLUMNS                # noqa: E402
 
@@ -42,6 +43,8 @@ EMIT = [
     (engine_mod, ["EngineProfile"]),
     (derived_mod, ["Derived"]),
     (planform_mod, ["SpanStation", "Planform", "Reconciliation"]),
+    (study_mod, ["DragPoint", "PolarPoint", "PolarResult", "Metrics", "SensitivityRow",
+                 "Improvement", "SensitivityResult", "SweepAxis", "SweepResult"]),
 ]
 
 SCALARS = {"float": "number", "int": "number", "bool": "boolean", "str": "string"}
@@ -246,6 +249,31 @@ def build() -> str:
         "  booster_solution?: LaunchFeasibility;",
         "  rail_trade?: RailTradePoint[];",
         "}",
+        "",
+        "export type StudyOp = \"polar\" | \"sensitivity\" | \"sweep\" | \"planform\";",
+        "",
+        "export interface StudyResponse {",
+        "  ok: boolean;",
+        "  op: StudyOp;",
+        "  polar?: PolarResult;",
+        "  sensitivity?: SensitivityResult;",
+        "  sweep?: SweepResult;",
+        "  planform?: Planform;",
+        "  reconciliation?: Reconciliation;",
+        "}",
+        "",
+        "/** Metrics a sweep can colour by. Keys match _core.study.METRICS. */",
+        "export const SWEEP_METRICS = " + json.dumps(
+            {k: {"label": v[0], "unit": v[1]} for k, v in study_mod.METRICS.items()}, indent=2)
+        + " as const;",
+        "",
+        "/** Parameters a sweep or sensitivity run can address. */",
+        "export const STUDY_PARAMS = " + json.dumps(
+            {k: {"label": v[0], "unit": v[1]} for k, v in study_mod.PARAM_LABELS.items()},
+            indent=2) + " as const;",
+        "",
+        "export const SWEEP_CONSTRAINTS = " + json.dumps(study_mod.CONSTRAINTS) + " as const;",
+        "export const SWEEP_MAX_GRID = " + str(study_mod.MAX_GRID) + ";",
         "",
         "export interface RailTradePoint {",
         "  rail_length_m: number;",

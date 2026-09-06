@@ -630,6 +630,147 @@ export interface Reconciliation {
   warnings: string[];
 }
 
+/** DragPoint(mach: 'float', cl: 'float', cd0: 'float', cdi: 'float', cd_wave: 'float', cd_total: 'float', ld: 'float', counts_cd0: 'float', counts_cdi: 'float', counts_wave: 'float', frac_cd0: 'float', frac_cdi: 'float', frac_wave: 'float') */
+export interface DragPoint {
+  /**  [M] */
+  mach: number;
+  cl: number;
+  cd0: number;
+  cdi: number;
+  cd_wave: number;
+  cd_total: number;
+  ld: number;
+  /** one drag count is 1e-4 of CD */
+  counts_cd0: number;
+  counts_cdi: number;
+  counts_wave: number;
+  frac_cd0: number;
+  frac_cdi: number;
+  frac_wave: number;
+}
+
+/** PolarPoint(cl: 'float', cd: 'float', ld: 'float') */
+export interface PolarPoint {
+  cl: number;
+  cd: number;
+  ld: number;
+}
+
+/** PolarResult(altitude_m: 'float', mass_kg: 'float', mach_ref: 'float', ld_max: 'float', cl_at_ld_max: 'float', cd_at_ld_max: 'float', v_at_ld_max_ms: 'float', mach_at_ld_max: 'float', cruise_ld: 'float', breakdown: 'List[DragPoint]' = <factory>, polar: 'List[PolarPoint]' = <factory>, ld_vs_mach: 'List[Tuple[float, float]]' = <factory>, note: 'str' = '') */
+export interface PolarResult {
+  /**  [m] */
+  altitude_m: number;
+  /**  [kg] */
+  mass_kg: number;
+  mach_ref: number;
+  ld_max: number;
+  cl_at_ld_max: number;
+  cd_at_ld_max: number;
+  /**  [m/s] */
+  v_at_ld_max_ms: number;
+  mach_at_ld_max: number;
+  cruise_ld: number;
+  breakdown: DragPoint[];
+  polar: PolarPoint[];
+  ld_vs_mach: number[][];
+  note: string;
+}
+
+/** Metrics(range_km: 'float', endurance_s: 'float', ld_max: 'float', max_level_mach: 'float', fuel_required_kg: 'float', exit_margin: 'float', min_static_margin: 'float', cruise_cl_fraction: 'float', feasible_launch: 'bool', feasible_fuel: 'bool') */
+export interface Metrics {
+  /**  [km] */
+  range_km: number;
+  /**  [s] */
+  endurance_s: number;
+  ld_max: number;
+  /**  [M] */
+  max_level_mach: number;
+  /**  [kg] */
+  fuel_required_kg: number;
+  exit_margin: number;
+  min_static_margin: number;
+  /** cruise CL as a fraction of CL_max */
+  cruise_cl_fraction: number;
+  feasible_launch: boolean;
+  feasible_fuel: boolean;
+}
+
+/** SensitivityRow(path: 'str', label: 'str', unit: 'str', baseline: 'float', low: 'float', high: 'float', range_low_pct: 'float', range_high_pct: 'float', endurance_low_pct: 'float', endurance_high_pct: 'float', ld_low_pct: 'float', ld_high_pct: 'float', span_pct: 'float', note: 'str' = '') */
+export interface SensitivityRow {
+  path: string;
+  label: string;
+  unit: string;
+  baseline: number;
+  low: number;
+  high: number;
+  range_low_pct: number;
+  range_high_pct: number;
+  endurance_low_pct: number;
+  endurance_high_pct: number;
+  ld_low_pct: number;
+  ld_high_pct: number;
+  /** widest range swing, for ordering the tornado */
+  span_pct: number;
+  note: string;
+}
+
+/** Improvement(path: 'str', label: 'str', from_value: 'float', to_value: 'float', unit: 'str', range_gain_pct: 'float', cost: 'str', assumption: 'str', score: 'float') */
+export interface Improvement {
+  path: string;
+  label: string;
+  from_value: number;
+  to_value: number;
+  unit: string;
+  range_gain_pct: number;
+  cost: string;
+  assumption: string;
+  score: number;
+}
+
+/** SensitivityResult(perturbation: 'float', baseline_range_km: 'float', baseline_endurance_s: 'float', baseline_ld_max: 'float', solves: 'int', solve_ms: 'float', rows: 'List[SensitivityRow]' = <factory>, improvements: 'List[Improvement]' = <factory>, note: 'str' = '') */
+export interface SensitivityResult {
+  perturbation: number;
+  /**  [km] */
+  baseline_range_km: number;
+  /**  [s] */
+  baseline_endurance_s: number;
+  baseline_ld_max: number;
+  solves: number;
+  /**  [m/s] */
+  solve_ms: number;
+  rows: SensitivityRow[];
+  improvements: Improvement[];
+  note: string;
+}
+
+/** SweepAxis(path: 'str', label: 'str', unit: 'str', lo: 'float', hi: 'float', n: 'int') */
+export interface SweepAxis {
+  path: string;
+  label: string;
+  unit: string;
+  lo: number;
+  hi: number;
+  n: number;
+}
+
+/** SweepResult(x: 'SweepAxis', y: 'SweepAxis', metric: 'str', metric_label: 'str', metric_unit: 'str', vmin: 'float', vmax: 'float', solves: 'int', solve_ms: 'float', values: 'List[List[float]]' = <factory>, violations: 'List[List[int]]' = <factory>, constraints: 'List[str]' = <factory>, note: 'str' = '') */
+export interface SweepResult {
+  x: SweepAxis;
+  y: SweepAxis;
+  metric: string;
+  metric_label: string;
+  metric_unit: string;
+  vmin: number;
+  vmax: number;
+  solves: number;
+  /**  [m/s] */
+  solve_ms: number;
+  values: number[][];
+  violations: number[][];
+  constraints: string[];
+  note: string;
+}
+
 /** Columns of the 50 Hz trajectory, in the order the solver packs them. */
 export const TRAJECTORY_COLUMNS = ["t", "x_m", "y_m", "s_ground_m", "h_m", "v_tas_ms", "v_ground_ms", "mach", "gamma_deg", "psi_deg", "bank_deg", "roc_ms", "mass_kg", "fuel_kg", "fuel_flow_kgs", "throttle_cmd", "throttle_act", "thrust_n", "drag_n", "lift_n", "thrust_margin_n", "ps_ms", "cl", "cd", "cd0", "cdi", "cd_wave", "ld", "q_pa", "load_factor", "rho", "a_sound_ms", "temp_k", "press_pa", "reynolds", "x_cg_m", "static_margin", "wave_drag_active", "stall_limited", "lift_limited", "phase"] as const;
 export type TrajectoryColumn = (typeof TRAJECTORY_COLUMNS)[number];
@@ -682,6 +823,109 @@ export interface FeasibilityResponse {
   booster_solution?: LaunchFeasibility;
   rail_trade?: RailTradePoint[];
 }
+
+export type StudyOp = "polar" | "sensitivity" | "sweep" | "planform";
+
+export interface StudyResponse {
+  ok: boolean;
+  op: StudyOp;
+  polar?: PolarResult;
+  sensitivity?: SensitivityResult;
+  sweep?: SweepResult;
+  planform?: Planform;
+  reconciliation?: Reconciliation;
+}
+
+/** Metrics a sweep can colour by. Keys match _core.study.METRICS. */
+export const SWEEP_METRICS = {
+  "range_km": {
+    "label": "Range on a full tank",
+    "unit": "km"
+  },
+  "endurance_s": {
+    "label": "Endurance",
+    "unit": "s"
+  },
+  "ld_max": {
+    "label": "L/D max",
+    "unit": ""
+  },
+  "max_level_mach": {
+    "label": "Maximum level Mach",
+    "unit": "M"
+  },
+  "fuel_required_kg": {
+    "label": "Fuel required",
+    "unit": "kg"
+  },
+  "exit_margin": {
+    "label": "Rail exit margin",
+    "unit": "x Vs"
+  }
+} as const;
+
+/** Parameters a sweep or sensitivity run can address. */
+export const STUDY_PARAMS = {
+  "airframe.oswald_e": {
+    "label": "Oswald efficiency",
+    "unit": ""
+  },
+  "airframe.cd0_sub": {
+    "label": "Parasite drag CD0",
+    "unit": ""
+  },
+  "airframe.mach_dd": {
+    "label": "Drag divergence Mach",
+    "unit": "M"
+  },
+  "airframe.dcd_wave": {
+    "label": "Wave drag increment",
+    "unit": ""
+  },
+  "airframe.aspect_ratio": {
+    "label": "Aspect ratio",
+    "unit": ""
+  },
+  "airframe.cl_max": {
+    "label": "Maximum lift coefficient",
+    "unit": ""
+  },
+  "airframe.mass_payload_kg": {
+    "label": "Payload",
+    "unit": "kg"
+  },
+  "airframe.wing_area_m2": {
+    "label": "Reference area",
+    "unit": "m2"
+  },
+  "airframe.span_m": {
+    "label": "Span",
+    "unit": "m"
+  },
+  "airframe.fuel_capacity_kg": {
+    "label": "Tank capacity",
+    "unit": "kg"
+  },
+  "engine.mdot_0": {
+    "label": "Sea-level mass flow",
+    "unit": "kg/s"
+  },
+  "engine.tsfc_base": {
+    "label": "TSFC",
+    "unit": "kg/(N h)"
+  },
+  "mission.cruise_altitude_m": {
+    "label": "Cruise altitude",
+    "unit": "m"
+  },
+  "mission.target_mach": {
+    "label": "Cruise Mach",
+    "unit": "M"
+  }
+} as const;
+
+export const SWEEP_CONSTRAINTS = ["rail exit", "static margin", "fuel capacity", "cruise CL against CL_max"] as const;
+export const SWEEP_MAX_GRID = 32;
 
 export interface RailTradePoint {
   rail_length_m: number;
