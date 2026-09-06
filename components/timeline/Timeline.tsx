@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { Button, Segment } from "@/components/ui/Button";
 import { clock, fixed } from "@/lib/format";
 import { indexAt } from "@/lib/playback";
-import { SPEEDS, useSim } from "@/lib/store";
+import { CAMERA_PRESETS, SPEEDS, useSim } from "@/lib/store";
 
 const PHASE_LABEL = ["rail", "climb", "cruise", "descent"];
 
@@ -188,9 +188,8 @@ export function PlaybackDriver() {
         s.setT(s.run?.t0 ?? 0);
       } else if (e.key === "End") {
         s.setT(s.run?.t1 ?? 0);
-      } else if (e.key >= "1" && e.key <= "5") {
-        const cams = ["chase", "rail", "side", "top", "orbit"] as const;
-        s.setCamera(cams[Number(e.key) - 1]);
+      } else if (e.key >= "1" && e.key <= "6") {
+        s.setCamera(CAMERA_PRESETS[Number(e.key) - 1]);
       }
     };
     window.addEventListener("keydown", onKey);

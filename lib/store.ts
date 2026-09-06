@@ -19,8 +19,15 @@ import {
   type ScheduleNode,
 } from "./types";
 
-export type CameraPreset = "chase" | "rail" | "side" | "top" | "orbit";
-export const CAMERA_PRESETS: CameraPreset[] = ["chase", "rail", "side", "top", "orbit"];
+export type CameraPreset = "chase" | "rail" | "side" | "top" | "cockpit" | "orbit";
+export const CAMERA_PRESETS: CameraPreset[] = [
+  "chase",
+  "rail",
+  "side",
+  "top",
+  "cockpit",
+  "orbit",
+];
 export const SPEEDS = [0.25, 1, 2, 10] as const;
 
 export type Status = "idle" | "solving" | "ready" | "error";
