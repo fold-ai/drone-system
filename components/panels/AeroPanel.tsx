@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { feasibility } from "@/app/api-client";
+import { css } from "@/lib/colormap";
 import { Panel } from "@/components/ui/Panel";
 import { fixed, sci, signed } from "@/lib/format";
 import { sampleAt } from "@/lib/playback";
@@ -133,6 +134,7 @@ export function AeroBody() {
         flags.current.className = `num h-4 text-[11px] tracking-[0.12em] ${
           parts.length ? "text-alert" : "text-dim"
         }`;
+        if (parts.length) flags.current.textContent = `! ${parts.join("   ")}`;
       }
       if (reNote.current) {
         reNote.current.style.display = s.reynolds < 5e5 && s.reynolds > 0 ? "block" : "none";
@@ -198,7 +200,7 @@ export function AeroBody() {
         <div className="grid grid-cols-3 gap-px bg-rule">
           <Cell label="required" value={fixed(m1.thrust_required_n, 0)} unit="N" />
           <Cell label="available" value={fixed(m1.thrust_available_n, 0)} unit="N" />
-          <Cell label="shortfall" value={fixed(m1.deficit_n, 0)} unit="N" alert />
+          <Cell label="shortfall" value={fixed(m1.deficit_n, 0)} unit="N" alert glyph="!" />
         </div>
         <p className="px-2 py-1.5 text-[10px] leading-snug text-dim">{m1.note}</p>
       </div>
@@ -222,15 +224,17 @@ export function AeroBody() {
           <Row label="CD" r={refs.cd} />
           <Row label="L/D" r={refs.ld} />
         </div>
+        {/* Stacked drag: components are quantities, so they take ramp colours.
+            Red stays out of it and is reserved for the exceedance flags above. */}
         <div className="mt-2 flex h-3 w-full border border-rule">
-          <div ref={bar.cd0} className="h-full bg-bright" style={{ width: "60%" }} />
-          <div ref={bar.cdi} className="h-full bg-dim" style={{ width: "30%" }} />
-          <div ref={bar.wave} className="h-full bg-alert" style={{ width: "0%" }} />
+          <div ref={bar.cd0} className="h-full" style={{ width: "60%", background: css(0.24) }} />
+          <div ref={bar.cdi} className="h-full" style={{ width: "30%", background: css(0.5) }} />
+          <div ref={bar.wave} className="h-full" style={{ width: "0%", background: css(0.92) }} />
         </div>
         <div className="mt-1 space-y-0.5">
-          <LegendRow swatch="bg-bright" label="CD0 parasite" r={bar.cd0n} />
-          <LegendRow swatch="bg-dim" label="CD induced" r={bar.cdin} />
-          <LegendRow swatch="bg-alert" label="CD wave" r={bar.waven} />
+          <LegendRow colour={css(0.24)} label="CD0 parasite" r={bar.cd0n} />
+          <LegendRow colour={css(0.5)} label="CD induced" r={bar.cdin} />
+          <LegendRow colour={css(0.92)} label="CD wave" r={bar.waven} />
         </div>
       </div>
 
@@ -295,18 +299,18 @@ function Row({
 }
 
 function LegendRow({
-  swatch,
+  colour,
   label,
   r,
 }: {
-  swatch: string;
+  colour: string;
   label: string;
   r: React.RefObject<HTMLSpanElement | null>;
 }) {
   return (
     <div className="flex items-baseline justify-between gap-2">
       <span className="flex items-center gap-1.5 text-[11px] text-dim">
-        <span className={`inline-block h-2 w-2 ${swatch}`} />
+        <span className="inline-block h-2 w-2" style={{ background: colour }} />
         {label}
       </span>
       <span ref={r} className="num text-[11px]">
@@ -325,11 +329,26 @@ function StaticRow({ label, value, alert = false }: { label: string; value: stri
   );
 }
 
-function Cell({ label, value, unit, alert = false }: { label: string; value: string; unit: string; alert?: boolean }) {
+function Cell({
+  label,
+  value,
+  unit,
+  alert = false,
+  glyph,
+}: {
+  label: string;
+  value: string;
+  unit: string;
+  alert?: boolean;
+  glyph?: string;
+}) {
   return (
     <div className="bg-panel px-2 py-1.5">
       <div className="text-[10px] text-dim">{label}</div>
       <div className={`num text-[15px] ${alert ? "text-alert" : "text-bright"}`}>
+        {/* An exceedance always carries a glyph as well as the colour, so it
+            survives being read without hue. */}
+        {glyph && <span className="mr-1">{glyph}</span>}
         {value}
         <span className="ml-1 text-[10px] text-dim">{unit}</span>
       </div>
@@ -413,7 +432,15 @@ function useLiveSweep(): Sweep | null {
   return sweep;
 }
 
-/** Thrust available and drag required against Mach. Sharpest contrast on screen. */
+/**
+ * Thrust available against drag required.
+ *
+ * The bold element of the console, and the one plot that answers the question
+ * the tool exists for. Thrust is green and drag is amber-yellow from the shared
+ * ramp, the crossing is marked in cyan, and the drag-divergence region is
+ * shaded so the cost of pushing past M_dd is visible rather than inferred.
+ * Neither curve is identified by colour alone: both are labelled on the plot.
+ */
 function paintCrossing(
   g: CanvasRenderingContext2D,
   w: number,
@@ -432,6 +459,10 @@ function paintCrossing(
   const y0 = padT;
   const y1 = h - padB;
 
+  const THRUST = css(0.58);
+  const DRAG = css(0.86);
+  const CROSS = css(0.44);
+
   const mLo = pts[0].mach;
   const mHi = pts[pts.length - 1].mach;
   let fMax = 0;
@@ -441,10 +472,20 @@ function paintCrossing(
   const px = (m: number) => x0 + ((m - mLo) / (mHi - mLo)) * (x1 - x0);
   const py = (f: number) => y1 - (Math.max(0, f) / fMax) * (y1 - y0);
 
+  // Drag-divergence region, shaded amber.
+  if (machDd < mHi) {
+    const xd = px(Math.max(mLo, machDd));
+    const grad = g.createLinearGradient(xd, 0, x1, 0);
+    grad.addColorStop(0, "rgba(232,134,46,0.0)");
+    grad.addColorStop(1, "rgba(232,134,46,0.16)");
+    g.fillStyle = grad;
+    g.fillRect(xd, y0, x1 - xd, y1 - y0);
+  }
+
   g.lineWidth = 1;
   g.strokeStyle = "#1c1c1c";
   g.fillStyle = "#6b6b6b";
-  g.font = '10px ui-monospace, monospace';
+  g.font = "10px ui-monospace, monospace";
   g.textAlign = "right";
   g.textBaseline = "middle";
   const fStep = niceStep(fMax, 4);
@@ -467,10 +508,9 @@ function paintCrossing(
     g.fillText(m.toFixed(1), x, y1 + 4);
   }
 
-  // drag divergence marker
   if (machDd >= mLo && machDd <= mHi) {
     const x = px(machDd);
-    g.strokeStyle = "#6b6b6b";
+    g.strokeStyle = css(0.9);
     g.setLineDash([2, 3]);
     g.beginPath();
     g.moveTo(x, y0);
@@ -478,12 +518,18 @@ function paintCrossing(
     g.stroke();
     g.setLineDash([]);
     g.textAlign = "left";
+    g.fillStyle = css(0.9);
     g.fillText("M_dd", x + 3, y0 + 1);
+    g.fillStyle = "#6b6b6b";
   }
 
-  const curve = (key: "thrust_available_n" | "drag_required_n", stroke: string, dash: number[]) => {
+  const curve = (
+    key: "thrust_available_n" | "drag_required_n",
+    stroke: string,
+    dash: number[],
+  ) => {
     g.strokeStyle = stroke;
-    g.lineWidth = 1.5;
+    g.lineWidth = 1.6;
     g.setLineDash(dash);
     g.beginPath();
     pts.forEach((p, i) => {
@@ -494,10 +540,22 @@ function paintCrossing(
     g.stroke();
     g.setLineDash([]);
   };
-  curve("drag_required_n", "#6b6b6b", [4, 3]);
-  curve("thrust_available_n", "#ffffff", []);
+  curve("drag_required_n", DRAG, [5, 3]);
+  curve("thrust_available_n", THRUST, []);
 
-  // crossing
+  // Label both curves on the plot: colour is a channel, never the only channel.
+  g.font = "10px ui-monospace, monospace";
+  g.textBaseline = "middle";
+  g.textAlign = "left";
+  const tEnd = pts[Math.min(pts.length - 1, Math.floor(pts.length * 0.18))];
+  g.fillStyle = THRUST;
+  g.fillText("thrust available", px(tEnd.mach) + 4, py(tEnd.thrust_available_n) - 9);
+  g.fillStyle = DRAG;
+  const dEnd = pts[Math.floor(pts.length * 0.78)];
+  g.textAlign = "right";
+  g.fillText("drag required", px(dEnd.mach) - 4, Math.max(y0 + 8, py(dEnd.drag_required_n)));
+
+  // Crossing: the maximum level speed.
   for (let i = 1; i < pts.length; i += 1) {
     const a = pts[i - 1];
     const b = pts[i];
@@ -507,15 +565,17 @@ function paintCrossing(
       const t = a.thrust_available_n + f * (b.thrust_available_n - a.thrust_available_n);
       const x = px(m);
       const y = py(t);
-      g.strokeStyle = "#ffffff";
+      g.strokeStyle = CROSS;
       g.lineWidth = 1;
+      g.setLineDash([3, 2]);
       g.beginPath();
       g.moveTo(x, y0);
       g.lineTo(x, y1);
       g.stroke();
-      g.fillStyle = "#ffffff";
+      g.setLineDash([]);
+      g.fillStyle = CROSS;
       g.beginPath();
-      g.arc(x, y, 3, 0, Math.PI * 2);
+      g.arc(x, y, 3.5, 0, Math.PI * 2);
       g.fill();
       g.textAlign = m > (mLo + mHi) / 2 ? "right" : "left";
       g.textBaseline = "top";
@@ -524,19 +584,20 @@ function paintCrossing(
     }
   }
 
-  // current state
+  // Current flight condition.
   if (dot.mach >= mLo && dot.mach <= mHi) {
     const x = px(dot.mach);
-    g.fillStyle = "#ffffff";
     g.strokeStyle = "#000000";
-    g.lineWidth = 2;
+    g.lineWidth = 2.5;
+    g.fillStyle = THRUST;
     g.beginPath();
-    g.arc(x, py(dot.thrust), 4, 0, Math.PI * 2);
+    g.arc(x, py(dot.thrust), 4.5, 0, Math.PI * 2);
     g.stroke();
     g.fill();
-    g.fillStyle = "#6b6b6b";
+    g.fillStyle = DRAG;
     g.beginPath();
-    g.arc(x, py(dot.drag), 3, 0, Math.PI * 2);
+    g.arc(x, py(dot.drag), 4.5, 0, Math.PI * 2);
+    g.stroke();
     g.fill();
   }
 

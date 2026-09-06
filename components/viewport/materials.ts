@@ -15,6 +15,7 @@ import { rampLUT } from "@/lib/colormap";
 
 export interface AirframeUniforms {
   uFieldMix: { value: number };
+  uFieldMode: { value: number };
   uRamp: { value: THREE.DataTexture };
   uBase: { value: THREE.Color };
   uRim: { value: THREE.Color };
@@ -22,8 +23,61 @@ export interface AirframeUniforms {
   uRimStrength: { value: number };
   uLightDir: { value: THREE.Vector3 };
   uOpacity: { value: number };
+  uMach: { value: number };
+  uQ: { value: number };
+  uQMax: { value: number };
+  uMachDd: { value: number };
+  uCpLo: { value: number };
+  uCpHi: { value: number };
   [key: string]: { value: unknown };
 }
+
+/** Selectable surface scalar. Keep in step with FIELD_MODES below. */
+export const FIELD_OFF = 0;
+export const FIELD_CP = 1;
+export const FIELD_MACH_LOCAL = 2;
+export const FIELD_Q = 3;
+
+export interface FieldMode {
+  id: number;
+  key: string;
+  label: string;
+  unit: string;
+  /** How the value is arrived at, shown under the colourbar. */
+  method: string;
+}
+
+export const FIELD_MODES: FieldMode[] = [
+  { id: FIELD_OFF, key: "off", label: "off", unit: "", method: "Neutral body shading." },
+  {
+    id: FIELD_CP,
+    key: "cp",
+    label: "Cp",
+    unit: "",
+    method:
+      "Potential flow over a sphere, Cp = 1 - 2.25 sin2(theta) from the local " +
+      "surface incidence, corrected by Prandtl-Glauert. An illustration of where " +
+      "pressure rises and falls, not a panel solution.",
+  },
+  {
+    id: FIELD_MACH_LOCAL,
+    key: "mach",
+    label: "local Mach",
+    unit: "M",
+    method:
+      "M_local = M_inf * sqrt(1 - Cp) from the Cp estimate above. Shows where the " +
+      "flow accelerates over the body relative to the freestream.",
+  },
+  {
+    id: FIELD_Q,
+    key: "q",
+    label: "dynamic pressure",
+    unit: "kPa",
+    method:
+      "Freestream dynamic pressure from the solver, uniform over the airframe. " +
+      "The body colour is the flight condition itself.",
+  },
+];
 
 // Every custom shader here has to opt into logarithmic depth. The renderer runs
 // with logarithmicDepthBuffer on so a scene spanning half a metre to two hundred
@@ -36,10 +90,12 @@ const VERT = /* glsl */ `
   attribute float aField;
   varying float vField;
   varying vec3 vNormalW;
+  varying vec3 vNormalM;
   varying vec3 vViewDir;
 
   void main() {
     vField = aField;
+    vNormalM = normal;
     vec4 world = modelMatrix * vec4(position, 1.0);
     vNormalW = normalize(mat3(modelMatrix) * normal);
     vViewDir = normalize(cameraPosition - world.xyz);
@@ -52,6 +108,7 @@ const FRAG = /* glsl */ `
   #include <common>
   #include <logdepthbuf_pars_fragment>
   uniform float uFieldMix;
+  uniform int uFieldMode;
   uniform sampler2D uRamp;
   uniform vec3 uBase;
   uniform vec3 uRim;
@@ -59,9 +116,31 @@ const FRAG = /* glsl */ `
   uniform float uRimStrength;
   uniform vec3 uLightDir;
   uniform float uOpacity;
+  uniform float uMach;
+  uniform float uQ;
+  uniform float uQMax;
+  uniform float uMachDd;
+  uniform float uCpLo;
+  uniform float uCpHi;
   varying float vField;
   varying vec3 vNormalW;
+  varying vec3 vNormalM;
   varying vec3 vViewDir;
+
+  // Surface pressure coefficient from the local incidence to the freestream.
+  //
+  // Potential flow over a sphere gives Cp = 1 - 2.25 sin2(theta) exactly, where
+  // theta is measured from the stagnation point. Applied to an arbitrary surface
+  // normal it is an illustration of where pressure rises and falls, not a panel
+  // solution, and the legend says so. Prandtl-Glauert carries it up in Mach.
+  float pressureCoefficient(vec3 nModel) {
+    vec3 flow = vec3(-1.0, 0.0, 0.0);   // nose is +X, freestream runs aft
+    float cosT = clamp(dot(normalize(nModel), -flow), -1.0, 1.0);
+    float sin2 = 1.0 - cosT * cosT;
+    float cp0 = 1.0 - 2.25 * sin2;
+    float beta = sqrt(max(0.06, 1.0 - uMach * uMach));
+    return cp0 / beta;
+  }
 
   void main() {
     #include <logdepthbuf_fragment>
@@ -72,12 +151,28 @@ const FRAG = /* glsl */ `
     float key = max(dot(n, normalize(uLightDir)), 0.0);
     float shade = 0.30 + 0.70 * key;
 
-    vec3 field = texture2D(uRamp, vec2(clamp(vField, 0.0, 1.0), 0.5)).rgb;
+    float t = vField;
+    if (uFieldMode == 1) {
+      float cp = pressureCoefficient(vNormalM);
+      t = (cp - uCpLo) / max(1e-4, uCpHi - uCpLo);
+    } else if (uFieldMode == 2) {
+      float cp = pressureCoefficient(vNormalM);
+      float local = uMach * sqrt(max(0.0, 1.0 - cp));
+      t = local / max(1e-4, uMachDd);
+    } else if (uFieldMode == 3) {
+      t = uQ / max(1e-4, uQMax);
+    }
+
+    vec3 field = texture2D(uRamp, vec2(clamp(t, 0.0, 1.0), 0.5)).rgb;
     vec3 body = mix(uBase, field, uFieldMix);
+
+    // With a field on, flatten the key light: shading must not be mistaken for
+    // data. The rim still carries the silhouette.
+    float lit = mix(shade, 0.62 + 0.38 * key, uFieldMix);
 
     // Fresnel rim: the silhouette edge lights up, the facing surface does not.
     float fres = pow(1.0 - clamp(dot(n, v), 0.0, 1.0), uRimPower);
-    vec3 col = body * shade + uRim * fres * uRimStrength;
+    vec3 col = body * lit + uRim * fres * uRimStrength;
 
     gl_FragColor = vec4(col, uOpacity);
   }
@@ -90,6 +185,7 @@ export function makeAirframeMaterial(opts?: {
 }): THREE.ShaderMaterial {
   const uniforms: AirframeUniforms = {
     uFieldMix: { value: 0 },
+    uFieldMode: { value: FIELD_OFF },
     uRamp: { value: rampLUT() },
     uBase: { value: new THREE.Color(opts?.base ?? "#242A31") },
     uRim: { value: new THREE.Color(opts?.rim ?? "#FFFFFF") },
@@ -97,6 +193,12 @@ export function makeAirframeMaterial(opts?: {
     uRimStrength: { value: 0.62 },
     uLightDir: { value: new THREE.Vector3(0.4, 0.8, 0.45).normalize() },
     uOpacity: { value: opts?.opacity ?? 1 },
+    uMach: { value: 0 },
+    uQ: { value: 0 },
+    uQMax: { value: 20000 },
+    uMachDd: { value: 0.82 },
+    uCpLo: { value: -2.0 },
+    uCpHi: { value: 1.0 },
   };
   return new THREE.ShaderMaterial({
     uniforms: uniforms as unknown as Record<string, THREE.IUniform>,

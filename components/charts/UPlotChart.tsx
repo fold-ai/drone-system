@@ -8,6 +8,8 @@ import { useSim } from "@/lib/store";
 export interface SeriesSpec {
   label: string;
   data: Float32Array | number[];
+  /** Colour from the shared ramp, so a trace matches its swatch and its 3D field. */
+  colour?: string;
   /** true for the reference run, drawn dim and dashed */
   ghost?: boolean;
   dash?: number[];
@@ -125,7 +127,7 @@ export function UPlotChart({
           ...spec.series.map((s) => ({
             label: s.label,
             scale: s.axis === "y2" ? "y2" : "y",
-            stroke: s.ghost ? COLOURS.dim : COLOURS.bright,
+            stroke: s.ghost ? COLOURS.dim : (s.colour ?? COLOURS.bright),
             width: s.width ?? (s.ghost ? 1 : 1.25),
             dash: s.dash ?? (s.ghost ? [3, 3] : undefined),
             points: { show: false },
@@ -184,10 +186,14 @@ export function UPlotChart({
             .map((s) => (
               <span key={s.label} className="flex items-center gap-1">
                 <span
-                  className="inline-block h-px w-3"
+                  className="inline-block h-[2px] w-3"
                   style={{
-                    background: COLOURS.bright,
-                    opacity: s.dash ? 0.55 : 1,
+                    background: s.colour ?? COLOURS.bright,
+                    // Dashed traces get a dashed swatch: the legend must not
+                    // rely on colour alone to tell two series apart.
+                    backgroundImage: s.dash
+                      ? `repeating-linear-gradient(90deg, ${s.colour ?? COLOURS.bright} 0 4px, transparent 4px 7px)`
+                      : undefined,
                   }}
                 />
                 {s.label}

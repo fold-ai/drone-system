@@ -52,6 +52,8 @@ interface State {
   showGhost: boolean;
   aeroDetached: boolean;
   paramsOpen: boolean;
+  fieldMode: string;
+  showStreamlines: boolean;
 
   setSpec: (patch: Partial<MissionSpec>) => void;
   setField: (path: string, value: number | boolean | string) => void;
@@ -74,6 +76,8 @@ interface State {
   setScrubbing: (v: boolean) => void;
 
   setCamera: (c: CameraPreset) => void;
+  setFieldMode: (m: string) => void;
+  setShowStreamlines: (v: boolean) => void;
   promoteToGhost: () => void;
   clearGhost: () => void;
   setAeroDetached: (v: boolean) => void;
@@ -173,6 +177,8 @@ export const useSim = create<State>((set, get) => ({
   showGhost: true,
   aeroDetached: false,
   paramsOpen: false,
+  fieldMode: "cp",
+  showStreamlines: true,
 
   setSpec: (patch) => {
     set({ spec: { ...get().spec, ...patch } });
@@ -348,6 +354,8 @@ export const useSim = create<State>((set, get) => ({
   setScrubbing: (v) => set({ scrubbing: v }),
 
   setCamera: (c) => set({ camera: c }),
+  setFieldMode: (m) => set({ fieldMode: m }),
+  setShowStreamlines: (v) => set({ showStreamlines: v }),
   promoteToGhost: () => {
     const run = get().run;
     if (run) set({ ghost: { ...run, label: `${run.label} (ref)` }, showGhost: true });

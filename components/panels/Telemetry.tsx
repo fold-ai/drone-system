@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { type ChartSpec, resampleOnto, UPlotChart } from "@/components/charts/UPlotChart";
+import { channelCss } from "@/lib/colormap";
 import { extent } from "@/lib/playback";
 import { useSim } from "@/lib/store";
 
@@ -25,7 +26,13 @@ export function Telemetry({ height }: { height: number }) {
 
     const build = (
       title: string,
-      cols: { key: keyof typeof run.cols; label: string; axis?: "y" | "y2"; dash?: number[] }[],
+      cols: {
+        key: keyof typeof run.cols;
+        label: string;
+        axis?: "y" | "y2";
+        dash?: number[];
+        channel?: string;
+      }[],
       opts: Partial<ChartSpec> = {},
     ): ChartSpec => ({
       title,
@@ -36,6 +43,7 @@ export function Telemetry({ height }: { height: number }) {
           data: (run.cols[c.key] ?? new Float32Array(t.length)) as Float32Array,
           axis: c.axis,
           dash: c.dash,
+          colour: channelCss(c.channel ?? String(c.key)),
         })),
         ...(g
           ? cols.map((c) => ({
@@ -51,41 +59,57 @@ export function Telemetry({ height }: { height: number }) {
 
     const machMax = Math.max(0.2, extent(run.cols.mach)[1] * 1.15);
     const altMax = Math.max(100, extent(run.cols.h_m)[1] * 1.1);
-    const forceMax = Math.max(
-      extent(run.cols.thrust_n)[1],
-      extent(run.cols.drag_n)[1],
-    ) * 1.1;
+
+    // The booster is a 2.5 kN solid motor burning for 190 ms. Scaling the
+    // thrust axis to that transient flattens 300 s of engine thrust into a flat
+    // line at the bottom, so the axis is scaled to free flight and the boost
+    // spike runs off the top. The title says so rather than the reader having
+    // to work out why the first sample is missing.
+    const phase = run.cols.phase;
+    let forceMax = 0;
+    let boosted = false;
+    const th = run.cols.thrust_n;
+    const dr = run.cols.drag_n;
+    for (let i = 0; i < run.n; i += 1) {
+      if (phase && phase[i] === 0) {
+        if (th && th[i] > forceMax) boosted = true;
+        continue;
+      }
+      if (th && th[i] > forceMax) forceMax = th[i];
+      if (dr && dr[i] > forceMax) forceMax = dr[i];
+    }
+    forceMax = Math.max(10, forceMax * 1.15);
 
     return [
       build(
         "Mach / altitude",
         [
-          { key: "mach", label: "M" },
-          { key: "h_m", label: "h", axis: "y2", dash: [4, 3] },
+          { key: "mach", label: "M", channel: "mach" },
+          { key: "h_m", label: "h", axis: "y2", dash: [4, 3], channel: "altitude" },
         ],
         { yRange: [0, machMax], y2Range: [0, altMax] },
       ),
       build(
-        "Thrust / drag  N",
+        boosted ? "Thrust / drag  N  (rail boost above scale)" : "Thrust / drag  N",
         [
-          { key: "thrust_n", label: "T" },
-          { key: "drag_n", label: "D", dash: [4, 3] },
+          { key: "thrust_n", label: "T", channel: "thrust" },
+          { key: "drag_n", label: "D", dash: [4, 3], channel: "drag" },
         ],
-        { yRange: [0, Math.max(10, forceMax)] },
+        { yRange: [0, forceMax] },
       ),
       build(
         "Throttle  commanded / actual",
         [
-          { key: "throttle_cmd", label: "cmd" },
-          { key: "throttle_act", label: "act", dash: [4, 3] },
+          { key: "throttle_cmd", label: "cmd", channel: "throttle_cmd" },
+          { key: "throttle_act", label: "act", dash: [4, 3], channel: "throttle_act" },
         ],
         { yRange: [0, 1.02] },
       ),
       build(
         "Fuel  kg  /  mass  kg",
         [
-          { key: "fuel_kg", label: "fuel" },
-          { key: "mass_kg", label: "mass", axis: "y2", dash: [4, 3] },
+          { key: "fuel_kg", label: "fuel", channel: "fuel" },
+          { key: "mass_kg", label: "mass", axis: "y2", dash: [4, 3], channel: "mass" },
         ],
         {
           yRange: [0, Math.max(0.1, extent(run.cols.fuel_kg)[1] * 1.15)],

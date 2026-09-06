@@ -7,10 +7,12 @@ import { fixed } from "@/lib/format";
 import { sampleAt } from "@/lib/playback";
 import { type CameraPreset, CAMERA_PRESETS, useSim } from "@/lib/store";
 import { Act1, useModelAvailable } from "./Act1";
+import { FieldLegend, FieldSelector } from "./FieldLegend";
 import { Gnomon } from "./Gnomon";
 import { MachCone } from "./MachCone";
-import { makeAirframeMaterial, makeHullMaterial } from "./materials";
+import { FIELD_MODES, makeAirframeMaterial, makeHullMaterial } from "./materials";
 import { RANGE_RING_SPACING_M, Rail } from "./Rail";
+import { Streamlines } from "./Streamlines";
 import { ReferenceTrail, Trail } from "./Trail";
 
 const DEG = Math.PI / 180;
@@ -68,6 +70,7 @@ function Aircraft({
   const booster = useRef<THREE.Group>(null);
   const jettisoned = useRef<THREE.Group>(null);
   const spec = useSim((s) => s.spec);
+  const showStreamlines = useSim((s) => s.showStreamlines);
   const reduced = usePrefersReducedMotion();
   const { camera, size } = useThree();
 
@@ -132,6 +135,16 @@ function Aircraft({
     const coneGroup = cone.current?.children[0];
     if (coneGroup) coneGroup.userData.mach = s.mach;
 
+    // --- surface field -------------------------------------------------
+    const mode = FIELD_MODES.find((f) => f.key === useSim.getState().fieldMode) ?? FIELD_MODES[0];
+    const u = material.uniforms;
+    u.uFieldMode.value = mode.id;
+    u.uFieldMix.value = mode.id === 0 ? 0 : 1;
+    u.uMach.value = s.mach;
+    u.uQ.value = s.q_pa;
+    u.uQMax.value = Math.max(1000, run.summary.max_q_pa);
+    u.uMachDd.value = spec.airframe.mach_dd;
+
     const b = spec.launch.booster;
     const burning = b.enabled && t < b.burn_time_s;
     if (booster.current) booster.current.visible = burning;
@@ -171,6 +184,7 @@ function Aircraft({
           <group ref={cone}>
             <MachCone lengthM={L} machDd={spec.airframe.mach_dd} reducedMotion={reduced} />
           </group>
+          <Streamlines lengthM={L} visible={showStreamlines} speed={reduced ? 0 : 1} />
           <group ref={booster} position={[-L * 0.2, -L * 0.09, 0]}>
             <mesh rotation={[0, 0, Math.PI / 2]}>
               <cylinderGeometry args={[L * 0.05, L * 0.05, L * 0.34, 12]} />
@@ -406,7 +420,7 @@ export function Scene() {
       </svg>
 
       <div className="pointer-events-none absolute inset-0 p-2">
-        <div className="pointer-events-auto flex flex-wrap gap-px">
+        <div className="pointer-events-auto flex flex-wrap items-center gap-px">
           {CAMERA_PRESETS.map((c, i) => (
             <button
               key={c}
@@ -428,14 +442,18 @@ export function Scene() {
           >
             R recentre
           </button>
+          <div className="ml-2">
+            <FieldSelector />
+          </div>
         </div>
 
         {run && (
           <>
-            <div className="pointer-events-none absolute left-2 top-9">
+            <div className="pointer-events-none absolute left-2 top-16">
               <Gnomon />
             </div>
             <ViewportHud />
+            <FieldLegendForMode />
           </>
         )}
 
@@ -460,6 +478,60 @@ export function Scene() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * The colourbar for whichever field is showing.
+ *
+ * The marker tracks a single representative number per field, named on the
+ * legend, because Cp and local Mach vary across the surface and a bare marker
+ * with no stated meaning would be worse than none.
+ */
+function FieldLegendForMode() {
+  const key = useSim((s) => s.fieldMode);
+  const run = useSim((s) => s.run);
+  const mode = FIELD_MODES.find((f) => f.key === key) ?? FIELD_MODES[0];
+  const machDd = run?.spec.airframe.mach_dd ?? 0.82;
+  const qMaxKpa = Math.max(1, (run?.summary.max_q_pa ?? 20000) / 1000);
+
+  const beta = (m: number) => Math.sqrt(Math.max(0.06, 1 - m * m));
+  const cpMin = (m: number) => -1.25 / beta(m);
+
+  if (mode.id === 0) return null;
+
+  const config =
+    mode.id === 1
+      ? {
+          domain: [-2, 1] as [number, number],
+          unit: "Cp",
+          label: "Cp, peak suction",
+          valueOf: (s: { mach: number }) => cpMin(s.mach),
+        }
+      : mode.id === 2
+        ? {
+            domain: [0, machDd] as [number, number],
+            unit: "M",
+            label: "local Mach, peak",
+            valueOf: (s: { mach: number }) => s.mach * Math.sqrt(1 - cpMin(s.mach)),
+          }
+        : {
+            domain: [0, qMaxKpa] as [number, number],
+            unit: "kPa",
+            label: "dynamic pressure",
+            valueOf: (s: { q_pa: number }) => s.q_pa / 1000,
+          };
+
+  return (
+    <div className="pointer-events-none absolute right-2 top-32">
+      <FieldLegend
+        domain={config.domain}
+        unit={config.unit}
+        label={config.label}
+        method={mode.method}
+        valueOf={config.valueOf as never}
+      />
     </div>
   );
 }
