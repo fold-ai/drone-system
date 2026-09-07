@@ -143,6 +143,51 @@ stores neither. There is no password anywhere in the repository. With the
 variables unset the step records itself as applied and does nothing, which is
 correct on a deployment where the operator already exists.
 
+`npm run db:smoke` writes one row into every table, reads it back and rolls
+back. A schema nobody has inserted into is a guess.
+
+### Records
+
+    airframes           a shape, its assumed length and the spec that goes with it
+    runs                one solve, with the spec hash, solver version and git sha
+    run_summary         the numbers the library sorts and filters on
+    run_warnings        diagnostics, by severity
+    run_events          the flight event list
+    trajectories        the encoded float buffer, as bytea
+    bench_runs          uploaded measurements
+    validation_points   model against measurement, with the residual
+    optimisations       a search, its objective, constraints and status
+    ai_reviews          an interpretation, its inputs and what it cost
+
+A trajectory is 18 000 samples across 41 columns. As rows that is three quarters
+of a million per run, so it is stored as the shuffled, deflated float32 buffer
+the solver already produces: 1.1 MB in the database against 2.9 MB raw, with no
+re-encoding on read and no second format to keep in step.
+
+`runs` is indexed on `(airframe_id, created_at)` for the library and on
+`spec_hash` so an identical solve is served from the table instead of
+recomputed. `solver_version` and `git_sha` are on every run because the physics
+moved once already and will again; runs on either side of a move are not
+comparable and these columns are how you tell.
+
+### Retention
+
+Payloads are the only large thing here. `trajectories.pinned` marks the ones
+that must never be pruned.
+
+**Policy.** Unpinned payloads older than 90 days are candidates for pruning. Pin
+anything that backs a decision, a validation point or an AI review. Pruning
+deletes the payload row only: the summary, warnings and events survive, so a
+pruned run stays in the library and stays sortable, and only loses its charts.
+
+Nothing deletes automatically yet, deliberately. The policy is written down and
+the column exists; a job that acts on it needs a retention decision from someone
+who owns the data, not a default chosen here. The candidate set is one query:
+
+    SELECT run_id, bytes, created_at FROM trajectories
+     WHERE pinned = FALSE AND created_at < NOW() - INTERVAL '90 days'
+     ORDER BY bytes DESC;
+
 ---
 
 ## The simulation

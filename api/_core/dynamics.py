@@ -36,7 +36,7 @@ from .aero import cd0_of_mach
 from .derived import derive
 from .atmosphere import isa
 from .constants import (G0, GAMMA_AIR, H_TROPO, ISA_EXP, LAPSE, P0_ISA, P_TROPO,
-                        R_AIR, RHO0_ISA, T0_ISA, T_TROPO)
+                        R_AIR, RHO0_ISA, SOLVER_VERSION, T0_ISA, T_TROPO)
 from .launch import feasibility as launch_feasibility
 from .launch import run_rail
 from .mission import (eval_schedule, fill_grids, resolve_profile, size_mission)
@@ -531,7 +531,8 @@ def simulate(spec: MissionSpec) -> SimulationResult:
         warnings.append(m1.note)
 
     summary = TrajectorySummary(
-        ok=True, solve_ms=(time.perf_counter() - t0_wall) * 1000.0, n_samples=len(rows),
+        ok=True, solver_version=SOLVER_VERSION,
+        solve_ms=(time.perf_counter() - t0_wall) * 1000.0, n_samples=len(rows),
         duration_s=t, gross_mass_kg=dry + fuel_loaded + b_mass,
         fuel_loaded_kg=fuel_loaded, fuel_burned_kg=fuel_loaded - mf, fuel_remaining_kg=mf,
         max_mach=max_mach, max_tas_ms=max_v, max_altitude_m=max_h, max_q_pa=max_q,

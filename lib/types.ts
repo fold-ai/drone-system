@@ -379,9 +379,10 @@ export interface Mach1Deficit {
   note: string;
 }
 
-/** TrajectorySummary(ok: 'bool', solve_ms: 'float', n_samples: 'int', duration_s: 'float', gross_mass_kg: 'float', fuel_loaded_kg: 'float', fuel_burned_kg: 'float', fuel_remaining_kg: 'float', max_mach: 'float', max_tas_ms: 'float', max_altitude_m: 'float', max_q_pa: 'float', max_load_factor: 'float', ground_range_km: 'float', time_to_cruise_s: 'float', best_ld: 'float', min_static_margin: 'float', wave_drag_entered: 'bool', stalled: 'bool', flameout: 'bool', ground_impact: 'bool', target_range_met: 'bool', termination: 'str', endurance_s: 'float') */
+/** TrajectorySummary(ok: 'bool', solver_version: 'str', solve_ms: 'float', n_samples: 'int', duration_s: 'float', gross_mass_kg: 'float', fuel_loaded_kg: 'float', fuel_burned_kg: 'float', fuel_remaining_kg: 'float', max_mach: 'float', max_tas_ms: 'float', max_altitude_m: 'float', max_q_pa: 'float', max_load_factor: 'float', ground_range_km: 'float', time_to_cruise_s: 'float', best_ld: 'float', min_static_margin: 'float', wave_drag_entered: 'bool', stalled: 'bool', flameout: 'bool', ground_impact: 'bool', target_range_met: 'bool', termination: 'str', endurance_s: 'float') */
 export interface TrajectorySummary {
   ok: boolean;
+  solver_version: string;
   /**  [m/s] */
   solve_ms: number;
   n_samples: number;

@@ -1,4 +1,15 @@
-"""Physical constants. Single source of truth - do not redefine these anywhere else."""
+"""Physical constants and the solver version.
+
+Single source of truth - do not redefine these anywhere else."""
+
+#: Stamped on every stored run. Bump the major when a change makes previously
+#: stored results incomparable, which is exactly what happened at 2.0.0: the
+#: planform was remeasured from the CAD render and the reference area moved by a
+#: factor of five, so runs either side of it describe different aircraft.
+#:
+#:   1.x  reference area 0.30 m2, span 1.10 m, AR 4.03
+#:   2.x  measured planform, length is the only dimensional input, AR 1.42
+SOLVER_VERSION = "2.0.0"
 
 G0 = 9.80665            # m/s^2   standard gravity
 R_AIR = 287.053         # J/(kg K) specific gas constant, dry air

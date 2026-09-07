@@ -14,7 +14,8 @@
     "test": "python3 tests/test_physics.py",
     "checkpoint": "python3 scripts/checkpoint1.py",
     "migrate": "node db/migrate.mjs",
-    "migrate:status": "node db/migrate.mjs --status"
+    "migrate:status": "node db/migrate.mjs --status",
+    "db:smoke": "node db/smoke.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.8",

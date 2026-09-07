@@ -397,6 +397,9 @@ class Mach1Deficit:
 @dataclass
 class TrajectorySummary:
     ok: bool
+    #: Which physics produced these numbers. Stored with every run, because a
+    #: history without it becomes uninterpretable the first time the model moves.
+    solver_version: str
     solve_ms: float
     n_samples: int
     duration_s: float
