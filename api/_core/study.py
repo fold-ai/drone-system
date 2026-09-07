@@ -25,6 +25,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from .aero import cd0_of_mach, stall_speed
 from .atmosphere import isa
 from .constants import G0
+from .geometry_ratios import ASPECT_RATIO as GEOMETRY_ASPECT_RATIO
 from .launch import feasibility as launch_feasibility
 from .mission import _max_range, cruise_point, size_mission
 from .performance import max_level_mach
@@ -221,18 +222,33 @@ def read_param(spec: MissionSpec, path: str) -> float:
     return float(node)
 
 
+# Writing one of these changes the aeroplane's dimensions, so everything
+# derived from overall length has to be recomputed with it.
+_RESCALES = ("airframe.length_m", "airframe.planform.span_stretch")
+
+
 def write_param(spec: MissionSpec, path: str, value: float) -> None:
-    """Aspect ratio is not a field. Moving it means moving span at constant area,
-    which is the change an engineer would actually make, and the caller is told
-    what span it implies."""
+    """Aspect ratio is not a field. Moving it means re-lofting the measured
+    planform at constant reference area - span times the stretch, chords divided
+    by it - which is the same change the optimiser makes, and the caller is told
+    what span it implies.
+
+    Overall length is the single authoritative dimension, so writing it
+    re-derives span, area, mean chord and the balance stations rather than
+    leaving them describing the previous aircraft.
+    """
     if path == "airframe.aspect_ratio":
-        spec.airframe.span_m = math.sqrt(max(1e-6, value * spec.airframe.wing_area_m2))
+        spec.airframe.planform.span_stretch = math.sqrt(
+            max(1e-6, value / GEOMETRY_ASPECT_RATIO))
+        spec.airframe.rescale()
         return
     parts = path.split(".")
     node: Any = spec
     for key in parts[:-1]:
         node = getattr(node, key)
     setattr(node, parts[-1], value)
+    if path in _RESCALES:
+        spec.airframe.rescale()
 
 
 PARAM_LABELS: Dict[str, Tuple[str, str]] = {
@@ -346,9 +362,11 @@ def sensitivity(spec: MissionSpec, paths: Optional[List[str]] = None,
         label, unit = PARAM_LABELS.get(path, (path.split(".")[-1].replace("_", " "), ""))
         note = ""
         if path == "airframe.aspect_ratio":
-            note = (f"at constant reference area, so span moves "
-                    f"{spec.airframe.span_m:.2f} m to "
-                    f"{math.sqrt(hi_v * spec.airframe.wing_area_m2):.2f} m")
+            stretched = copy.deepcopy(spec)
+            write_param(stretched, path, hi_v)
+            note = (f"by re-lofting the measured planform at constant reference "
+                    f"area, so span moves {spec.airframe.span_m:.2f} m to "
+                    f"{stretched.airframe.span_m:.2f} m")
         rows.append(SensitivityRow(
             path=path, label=label, unit=unit, baseline=b, low=lo_v, high=hi_v,
             range_low_pct=_pct(lo.range_km, base.range_km),

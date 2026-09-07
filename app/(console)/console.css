@@ -17,6 +17,12 @@
   --color-bright: #ffffff;
   --color-alert: #ff3b1f;
 
+  /* Machine-written commentary. Deliberately not white: every computed figure
+     on the console is white or grey, so prose in this colour cannot be mistaken
+     for a solver result at a glance. */
+  --color-ai: #8fb4d9;
+  --color-ai-wash: #070b0f;
+
   --font-sans: var(--font-inter-tight), system-ui, sans-serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, "SF Mono", monospace;
 

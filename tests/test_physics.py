@@ -732,6 +732,95 @@ def test_span_load_is_bounded_and_departs_from_elliptical():
     note(f"Schrenk span load departs from elliptical by {worst.departure * 100:+.0f}% at "
          f"eta {worst.eta:.2f}; this is an approximation, not a lifting-line solve")
 
+
+def test_every_dimension_follows_length_through_both_write_paths():
+    """Length is the single authoritative input, so changing it must move span,
+    area, mean chord and all six balance stations together.
+
+    Setting the field alone leaves the previous aircraft's centre of gravity in
+    place, and a static margin computed against a neutral point belonging to a
+    different aeroplane looks entirely plausible. Both writers - the optimiser's
+    design vector and the study page's parameter sweep - go through rescale().
+    """
+    import copy
+    from _core import optimise as search
+    from _core.schema import MissionSpec, from_dict
+    from _core.study import write_param
+    from _core.geometry_ratios import (SPAN_OVER_L, AREA_OVER_L2, MAC_OVER_L,
+                                       NEUTRAL_POINT_OVER_L)
+
+    base = from_dict(MissionSpec, {})
+    for length in (1.2, 2.0, 3.2):
+        for label, spec in (
+            ("apply_vector", search.apply_vector(base, {"length_m": length})),
+            ("write_param", None),
+        ):
+            if spec is None:
+                spec = copy.deepcopy(base)
+                write_param(spec, "airframe.length_m", length)
+            af = spec.airframe
+            assert abs(af.span_m - SPAN_OVER_L * length) < 1e-9, f"{label} span at {length}"
+            assert abs(af.wing_area_m2 - AREA_OVER_L2 * length ** 2) < 1e-9, f"{label} area"
+            assert abs(af.mac_m - MAC_OVER_L * length) < 1e-9, f"{label} mac"
+            # The neutral point is the one that silently corrupts static margin.
+            assert abs(af.x_np_m / length - NEUTRAL_POINT_OVER_L) < 1e-9, (
+                f"{label}: neutral point at x/L {af.x_np_m / length:.4f} for length "
+                f"{length} m, expected {NEUTRAL_POINT_OVER_L:.4f}")
+            assert abs(af.x_engine_m / length - af.x_engine_frac) < 1e-9, f"{label} engine"
+    note("span, area, MAC and all six balance stations scale with length through "
+         "both the optimiser and the study writer")
+
+
+def test_changing_aspect_ratio_holds_reference_area():
+    """Both writers mean the same thing by aspect ratio: re-loft the measured
+    planform at constant reference area. Two definitions of the same word would
+    make the optimiser and the sensitivity table disagree about the same
+    aircraft."""
+    import copy
+    from _core import optimise as search
+    from _core.schema import MissionSpec, from_dict
+    from _core.study import write_param
+
+    base = from_dict(MissionSpec, {})
+    area = base.airframe.wing_area_m2
+    for target in (2.0, 4.0, 6.0):
+        a = search.apply_vector(base, {"aspect_ratio": target}).airframe
+        b = copy.deepcopy(base)
+        write_param(b, "airframe.aspect_ratio", target)
+        assert abs(a.aspect_ratio - target) < 1e-6, f"optimiser AR {a.aspect_ratio}"
+        assert abs(b.airframe.aspect_ratio - target) < 1e-6
+        assert abs(a.wing_area_m2 - area) < 1e-9, "reference area moved"
+        assert abs(a.span_m - b.airframe.span_m) < 1e-9, "the two writers disagree on span"
+    note("aspect ratio re-lofts at constant reference area, identically from both writers")
+
+
+def test_a_rejected_design_scores_worse_than_every_real_one():
+    """The search maximises, so an unbuildable design has to score low and
+    finite. Positive infinity would win every comparison and take over the
+    population; any infinity at all cannot be stored as JSON or as jsonb, and
+    the search state is written to Postgres between batches."""
+    import json
+    import math
+    from _core import optimise as search
+    from _core.schema import MissionSpec, from_dict
+
+    base = from_dict(MissionSpec, {})
+    keys = ["length_m", "aspect_ratio"]
+    state = search.init_state(keys, population=8, seed=3)
+    # A fresh state must serialise: nothing is scored yet.
+    json.dumps(search.state_to_json(state), allow_nan=False)
+
+    state, evals = search.step(state, base, "range_km", None,
+                               search.ConstraintSpec(), budget=12, deadline_s=20.0)
+    assert evals, "no evaluations performed"
+    for e in evals:
+        assert math.isfinite(e.objective) and math.isfinite(e.penalised), e.violations
+        assert e.penalised >= search.REJECTED
+    json.dumps(search.state_to_json(state), allow_nan=False)
+    json.dumps([e.__dict__ for e in evals], allow_nan=False)
+    note(f"{len(evals)} evaluations, all finite and JSON-safe; rejected designs "
+         f"score {search.REJECTED:.0e}")
+
 # ==========================================================================
 
 def main() -> int:

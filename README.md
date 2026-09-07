@@ -131,6 +131,65 @@ why `runs` records `solver_version` and `git_sha`: without them the history
 becomes uninterpretable the first time the physics moves, and it just moved.
 Treat anything recorded earlier as a different aircraft.
 
+### Length has to move everything
+
+Length being the authoritative input only means something if writing it moves
+the whole aeroplane. Span, reference area, mean chord and all six mass stations
+are derived from it by `AirframeSpec.rescale()`, and both writers go through
+that one function: the optimiser's design vector and the study page's parameter
+sweep.
+
+Setting the field on its own is the failure this guards against. The aircraft
+keeps the previous length's centre of gravity and neutral point, and the static
+margin that comes out is a plausible-looking number for an aeroplane that was
+never built. Two tests pin it: every dimension scales with length through both
+writers, and the neutral point stays at x/L 0.497 at every length.
+
+Aspect ratio means one thing in both places as well. It re-lofts the measured
+planform at constant reference area, span times the stretch and every chord
+divided by it, so AR goes as stretch squared. Two definitions of the same word
+would have the optimiser and the sensitivity table quietly disagreeing about the
+same aircraft.
+
+## Interpretation, and what the model is not allowed to do
+
+An OpenAI model writes the commentary on `/admin-pro/optimise`. It is given the
+optimisation result, the sensitivity table and the drag breakdown as structured
+JSON and asked what the search found, which constraints bind, which parameters
+are worth engineering effort, and what to look at next.
+
+Three things are enforced in code rather than asked for in the prompt.
+
+**It cannot introduce a number.** Every numeric literal in the reply is
+extracted and looked for in the JSON it was given, allowing for rounding, a
+fraction quoted as a percentage and thousands separators. Anything absent is
+returned as unverified and rendered struck through, with the count stated above
+the text. The prompt also forbids it, which is necessary and not sufficient.
+
+**Its input is assembled server-side.** The route reads the optimisation from
+Postgres and calls the solver itself. If the browser supplied the source JSON,
+the numbers the reply is checked against would be whatever the client chose to
+send, and the check would prove nothing.
+
+**It is never asked which design to build.** The questions are all about what
+the computed results mean. The optimiser proposes, the operator disposes, and
+nothing on the page writes a design back into the console.
+
+The text is labelled `WRITTEN BY A LANGUAGE MODEL` wherever it appears and drawn
+in a colour used for nothing else, because a paragraph that reads like solver
+output will be trusted like it. It sits beside its own source table so a wrong
+claim is visible without going to look for it.
+
+The key is read from `OPENAI_API_KEY` inside the route handler and never reaches
+the browser bundle; the build is grepped for it. Spend is capped by
+`OPENAI_MAX_COST_USD` per review, the token cost is recorded in `ai_reviews`
+next to the text, and an identical question is served from the stored answer
+rather than paid for twice. `OPENAI_BASE_URL` points the route at a compatible
+endpoint or a stub.
+
+Without a key the page still works. The review is commentary; the computed
+results stand on their own.
+
 ## Database
 
 Plain SQL migrations under `db/migrations`, forward-only, one transaction each,

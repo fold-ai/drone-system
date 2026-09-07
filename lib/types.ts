@@ -53,6 +53,8 @@ export interface PlanformSpec {
   fin_span_frac: number;
   /** blade station, fraction of semispan */
   fin_station_frac: number;
+  /** Re-loft the measured planform at a different aspect ratio. The drawn shape is AR 1.42 and that is a measurement, not a free parameter. An optimiser that wants a different aspect ratio is asking for a different aeroplane, so it says so here: span is multiplied by this and every chord divided by it, which holds reference area constant and takes aspect ratio to 1.42 * stretch^2. At 1.0 the planform is exactly as measured. */
+  span_stretch: number;
 }
 
 /** Carbon-composite blended-delta UAV. All lengths measured aft from the nose datum. */
@@ -87,6 +89,17 @@ export interface AirframeSpec {
   mass_payload_kg: number;
   /** tank volume limit [kg] */
   fuel_capacity_kg: number;
+  /** distributed structure, near the area centroid */
+  x_airframe_frac: number;
+  /** casing runs x/L 0.45 to 0.60 */
+  x_engine_frac: number;
+  /** immediately behind the radome */
+  x_avionics_frac: number;
+  x_payload_frac: number;
+  /** close to the neutral point, so burn moves the CG little */
+  x_fuel_frac: number;
+  /** derived: quarter chord of the mean aerodynamic chord */
+  x_np_frac: number;
   /**  [m] */
   x_airframe_m: number;
   /**  [m] */
@@ -960,12 +973,18 @@ export const DEFAULT_MISSION_SPEC: MissionSpec = {
     "mass_avionics_kg": 1.8,
     "mass_payload_kg": 1.0,
     "fuel_capacity_kg": 3.0,
-    "x_airframe_m": 0.95,
-    "x_engine_m": 1.45,
-    "x_avionics_m": 0.45,
-    "x_payload_m": 0.55,
-    "x_fuel_m": 0.8,
-    "x_np_m": 0.96,
+    "x_airframe_frac": 0.5,
+    "x_engine_frac": 0.52,
+    "x_avionics_frac": 0.26,
+    "x_payload_frac": 0.3,
+    "x_fuel_frac": 0.5,
+    "x_np_frac": 0.49687926747933053,
+    "x_airframe_m": 1.0,
+    "x_engine_m": 1.04,
+    "x_avionics_m": 0.52,
+    "x_payload_m": 0.6,
+    "x_fuel_m": 1.0,
+    "x_np_m": 0.9937585349586611,
     "static_margin_min": 0.03,
     "planform": {
       "sweep_inboard_deg": 59.0,
@@ -987,7 +1006,8 @@ export const DEFAULT_MISSION_SPEC: MissionSpec = {
       "engine_end_frac": 0.6,
       "engine_radius_frac": 0.055,
       "fin_span_frac": 0.1,
-      "fin_station_frac": 0.62
+      "fin_station_frac": 0.62,
+      "span_stretch": 1.0
     },
     "planform_area_tolerance": 0.02
   },
@@ -1079,9 +1099,9 @@ export const FIELD_META: Record<string, FieldMeta> =
     "type": "number",
     "default": 2.0,
     "doc": "ASSUMED. The render is dimensionless.",
-    "min": 1.0,
+    "min": 0.8,
     "max": 4.0,
-    "step": 0.01
+    "step": 0.05
   },
   "airframe.wing_area_m2": {
     "path": "airframe.wing_area_m2",
@@ -1089,10 +1109,7 @@ export const FIELD_META: Record<string, FieldMeta> =
     "unit": "m2",
     "type": "number",
     "default": 1.471075,
-    "doc": "S, derived: 0.368 L^2",
-    "min": 0.1,
-    "max": 0.6,
-    "step": 0.005
+    "doc": "S, derived: 0.368 L^2"
   },
   "airframe.span_m": {
     "path": "airframe.span_m",
@@ -1100,10 +1117,7 @@ export const FIELD_META: Record<string, FieldMeta> =
     "unit": "m",
     "type": "number",
     "default": 1.444,
-    "doc": "b, derived: 0.722 L",
-    "min": 0.6,
-    "max": 2.2,
-    "step": 0.01
+    "doc": "b, derived: 0.722 L"
   },
   "airframe.mac_m": {
     "path": "airframe.mac_m",
@@ -1111,10 +1125,7 @@ export const FIELD_META: Record<string, FieldMeta> =
     "unit": "m",
     "type": "number",
     "default": 1.182848560735352,
-    "doc": "mean aerodynamic chord, derived: 0.591 L",
-    "min": 0.1,
-    "max": 0.6,
-    "step": 0.001
+    "doc": "mean aerodynamic chord, derived: 0.591 L"
   },
   "airframe.cd0_sub": {
     "path": "airframe.cd0_sub",
@@ -1237,66 +1248,113 @@ export const FIELD_META: Record<string, FieldMeta> =
     "max": 6.0,
     "step": 0.05
   },
+  "airframe.x_airframe_frac": {
+    "path": "airframe.x_airframe_frac",
+    "label": "x airframe frac",
+    "unit": "",
+    "type": "number",
+    "default": 0.5,
+    "doc": "distributed structure, near the area centroid",
+    "min": 0.05,
+    "max": 0.95,
+    "step": 0.01
+  },
+  "airframe.x_engine_frac": {
+    "path": "airframe.x_engine_frac",
+    "label": "x engine frac",
+    "unit": "",
+    "type": "number",
+    "default": 0.52,
+    "doc": "casing runs x/L 0.45 to 0.60",
+    "min": 0.05,
+    "max": 0.95,
+    "step": 0.01
+  },
+  "airframe.x_avionics_frac": {
+    "path": "airframe.x_avionics_frac",
+    "label": "x avionics frac",
+    "unit": "",
+    "type": "number",
+    "default": 0.26,
+    "doc": "immediately behind the radome",
+    "min": 0.05,
+    "max": 0.95,
+    "step": 0.01
+  },
+  "airframe.x_payload_frac": {
+    "path": "airframe.x_payload_frac",
+    "label": "x payload frac",
+    "unit": "",
+    "type": "number",
+    "default": 0.3,
+    "min": 0.05,
+    "max": 0.95,
+    "step": 0.01
+  },
+  "airframe.x_fuel_frac": {
+    "path": "airframe.x_fuel_frac",
+    "label": "x fuel frac",
+    "unit": "",
+    "type": "number",
+    "default": 0.5,
+    "doc": "close to the neutral point, so burn moves the CG little",
+    "min": 0.05,
+    "max": 0.95,
+    "step": 0.01
+  },
+  "airframe.x_np_frac": {
+    "path": "airframe.x_np_frac",
+    "label": "x np frac",
+    "unit": "",
+    "type": "number",
+    "default": 0.49687926747933053,
+    "doc": "derived: quarter chord of the mean aerodynamic chord",
+    "min": 0.2,
+    "max": 0.9,
+    "step": 0.005
+  },
   "airframe.x_airframe_m": {
     "path": "airframe.x_airframe_m",
     "label": "x airframe m",
     "unit": "m",
     "type": "number",
-    "default": 0.95,
-    "min": 0.0,
-    "max": 4.0,
-    "step": 0.01
+    "default": 1.0
   },
   "airframe.x_engine_m": {
     "path": "airframe.x_engine_m",
     "label": "x engine m",
     "unit": "m",
     "type": "number",
-    "default": 1.45,
-    "min": 0.0,
-    "max": 4.0,
-    "step": 0.01
+    "default": 1.04
   },
   "airframe.x_avionics_m": {
     "path": "airframe.x_avionics_m",
     "label": "x avionics m",
     "unit": "m",
     "type": "number",
-    "default": 0.45,
-    "min": 0.0,
-    "max": 4.0,
-    "step": 0.01
+    "default": 0.52
   },
   "airframe.x_payload_m": {
     "path": "airframe.x_payload_m",
     "label": "x payload m",
     "unit": "m",
     "type": "number",
-    "default": 0.55,
-    "min": 0.0,
-    "max": 4.0,
-    "step": 0.01
+    "default": 0.6
   },
   "airframe.x_fuel_m": {
     "path": "airframe.x_fuel_m",
     "label": "x fuel m",
     "unit": "m",
     "type": "number",
-    "default": 0.8,
-    "min": 0.0,
-    "max": 4.0,
-    "step": 0.01
+    "default": 1.0
   },
   "airframe.x_np_m": {
     "path": "airframe.x_np_m",
     "label": "x np m",
     "unit": "m",
     "type": "number",
-    "default": 0.96,
-    "doc": "neutral point",
-    "min": 0.0,
-    "max": 4.0,
-    "step": 0.01
+    "default": 0.9937585349586611,
+    "doc": "neutral point"
   },
   "airframe.static_margin_min": {
     "path": "airframe.static_margin_min",
@@ -1527,6 +1585,17 @@ export const FIELD_META: Record<string, FieldMeta> =
     "doc": "blade station, fraction of semispan",
     "min": 0.2,
     "max": 0.95,
+    "step": 0.01
+  },
+  "airframe.planform.span_stretch": {
+    "path": "airframe.planform.span_stretch",
+    "label": "span stretch",
+    "unit": "",
+    "type": "number",
+    "default": 1.0,
+    "doc": "Re-loft the measured planform at a different aspect ratio. The drawn shape is AR 1.42 and that is a measurement, not a free parameter. An optimiser that wants a different aspect ratio is asking for a different aeroplane, so it says so here: span is multiplied by this and every chord divided by it, which holds reference area constant and takes aspect ratio to 1.42 * stretch^2. At 1.0 the planform is exactly as measured.",
+    "min": 0.6,
+    "max": 2.5,
     "step": 0.01
   },
   "engine.mdot_0": {

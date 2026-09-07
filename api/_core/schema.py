@@ -11,7 +11,8 @@ from dataclasses import dataclass, field, fields, is_dataclass
 from typing import Any, Dict, List, Optional, get_args, get_origin, get_type_hints
 
 from .constants import G0
-from .geometry_ratios import AREA_OVER_L2, MAC_OVER_L, SPAN_OVER_L
+from .geometry_ratios import (AREA_OVER_L2, MAC_OVER_L, NEUTRAL_POINT_OVER_L,
+                              SPAN_OVER_L)
 
 
 # --------------------------------------------------------------------------
@@ -59,6 +60,16 @@ class PlanformSpec:
     fin_span_frac: float = 0.10       # blade surface height, fraction of semispan
     fin_station_frac: float = 0.62    # blade station, fraction of semispan
 
+    span_stretch: float = 1.0
+    """Re-loft the measured planform at a different aspect ratio.
+
+    The drawn shape is AR 1.42 and that is a measurement, not a free parameter.
+    An optimiser that wants a different aspect ratio is asking for a different
+    aeroplane, so it says so here: span is multiplied by this and every chord
+    divided by it, which holds reference area constant and takes aspect ratio to
+    1.42 * stretch^2. At 1.0 the planform is exactly as measured.
+    """
+
 
 @dataclass
 class AirframeSpec:
@@ -90,13 +101,25 @@ class AirframeSpec:
     mass_payload_kg: float = 1.0     # 0 - 3.0
     fuel_capacity_kg: float = 3.0    # tank volume limit
 
-    # balance (m aft of nose datum)
-    x_airframe_m: float = 0.95
-    x_engine_m: float = 1.45
-    x_avionics_m: float = 0.45
-    x_payload_m: float = 0.55
-    x_fuel_m: float = 0.80
-    x_np_m: float = 0.96             # neutral point
+    # --- balance ---------------------------------------------------------
+    # Stations are fractions of overall length, like every other dimension, and
+    # the metre values below are derived from them. Absolute stations tuned for
+    # one length stop meaning anything the moment length becomes a design
+    # variable, which is exactly what the optimiser does to it.
+    x_airframe_frac: float = 0.50    # distributed structure, near the area centroid
+    x_engine_frac: float = 0.52      # casing runs x/L 0.45 to 0.60
+    x_avionics_frac: float = 0.26    # immediately behind the radome
+    x_payload_frac: float = 0.30
+    x_fuel_frac: float = 0.50        # close to the neutral point, so burn moves the CG little
+    x_np_frac: float = 0.0           # derived: quarter chord of the mean aerodynamic chord
+
+    # Derived from the fractions above when left at zero.
+    x_airframe_m: float = 0.0
+    x_engine_m: float = 0.0
+    x_avionics_m: float = 0.0
+    x_payload_m: float = 0.0
+    x_fuel_m: float = 0.0
+    x_np_m: float = 0.0              # neutral point
     static_margin_min: float = 0.03  # flag below 3% MAC
 
     planform: PlanformSpec = field(default_factory=PlanformSpec)
@@ -110,12 +133,45 @@ class AirframeSpec:
         overwriting them, so a disagreement surfaces as an error rather than as
         a silently different aircraft.
         """
+        stretch = max(1e-6, self.planform.span_stretch)
         if self.wing_area_m2 <= 0.0:
             self.wing_area_m2 = AREA_OVER_L2 * self.length_m * self.length_m
         if self.span_m <= 0.0:
-            self.span_m = SPAN_OVER_L * self.length_m
+            self.span_m = SPAN_OVER_L * self.length_m * stretch
         if self.mac_m <= 0.0:
-            self.mac_m = MAC_OVER_L * self.length_m
+            self.mac_m = MAC_OVER_L * self.length_m / stretch
+        if self.x_np_frac <= 0.0:
+            self.x_np_frac = NEUTRAL_POINT_OVER_L
+        for frac_name, m_name in (
+            ("x_airframe_frac", "x_airframe_m"),
+            ("x_engine_frac", "x_engine_m"),
+            ("x_avionics_frac", "x_avionics_m"),
+            ("x_payload_frac", "x_payload_m"),
+            ("x_fuel_frac", "x_fuel_m"),
+            ("x_np_frac", "x_np_m"),
+        ):
+            if getattr(self, m_name) <= 0.0:
+                setattr(self, m_name, getattr(self, frac_name) * self.length_m)
+
+    DERIVED_FROM_LENGTH = (
+        "wing_area_m2", "span_m", "mac_m",
+        "x_airframe_m", "x_engine_m", "x_avionics_m", "x_payload_m", "x_fuel_m", "x_np_m",
+    )
+
+    def rescale(self) -> "AirframeSpec":
+        """Re-derive every dimension that follows from overall length.
+
+        Length is the single authoritative input, so changing it has to move
+        span, area, mean chord and all six balance stations together. Setting
+        the field alone leaves the aircraft with the old aeroplane's centre of
+        gravity, which shows up as a static margin that looks plausible and is
+        not. Anything that writes length_m or span_stretch calls this.
+        """
+        for name in self.DERIVED_FROM_LENGTH:
+            setattr(self, name, 0.0)
+        self.x_np_frac = 0.0
+        self.__post_init__()
+        return self
 
     @property
     def aspect_ratio(self) -> float:
@@ -576,10 +632,7 @@ FIELD_RANGES: Dict[str, tuple] = {
     "mission.duration_s": (10.0, 1200.0, 5.0),
     "mission.descent_start_s": (5.0, 1200.0, 1.0),
     # airframe
-    "airframe.wing_area_m2": (0.10, 0.60, 0.005),
-    "airframe.span_m": (0.60, 2.20, 0.01),
-    "airframe.mac_m": (0.10, 0.60, 0.001),
-    "airframe.length_m": (1.00, 4.00, 0.01),
+    "airframe.planform.span_stretch": (0.6, 2.5, 0.01),
     "airframe.cd0_sub": (0.010, 0.060, 0.0005),
     "airframe.mach_dd": (0.50, 0.95, 0.005),
     "airframe.dcd_wave": (0.0, 0.150, 0.001),
@@ -591,12 +644,13 @@ FIELD_RANGES: Dict[str, tuple] = {
     "airframe.mass_avionics_kg": (0.5, 5.0, 0.05),
     "airframe.mass_payload_kg": (0.0, 3.0, 0.05),
     "airframe.fuel_capacity_kg": (0.5, 6.0, 0.05),
-    "airframe.x_airframe_m": (0.0, 4.0, 0.01),
-    "airframe.x_engine_m": (0.0, 4.0, 0.01),
-    "airframe.x_avionics_m": (0.0, 4.0, 0.01),
-    "airframe.x_payload_m": (0.0, 4.0, 0.01),
-    "airframe.x_fuel_m": (0.0, 4.0, 0.01),
-    "airframe.x_np_m": (0.0, 4.0, 0.01),
+    "airframe.x_airframe_frac": (0.05, 0.95, 0.01),
+    "airframe.x_engine_frac": (0.05, 0.95, 0.01),
+    "airframe.x_avionics_frac": (0.05, 0.95, 0.01),
+    "airframe.x_payload_frac": (0.05, 0.95, 0.01),
+    "airframe.x_fuel_frac": (0.05, 0.95, 0.01),
+    "airframe.x_np_frac": (0.20, 0.90, 0.005),
+    "airframe.length_m": (0.8, 4.0, 0.05),
     "airframe.static_margin_min": (0.0, 0.25, 0.005),
     "airframe.planform_area_tolerance": (0.005, 0.25, 0.005),
     # planform geometry

@@ -21,8 +21,20 @@ export const AUTH = {
   /** Where an unauthenticated request is sent. Must itself be public. */
   loginPath: "/admin-pro/login",
 
-  /** Solver endpoints. Gated: an open solver endpoint leaks the whole model. */
-  apiPrefix: "/api",
+  /**
+   * Gated prefixes. The solver, because an open solver endpoint leaks the whole
+   * model, and the job routes, because they drive it.
+   */
+  gatedPrefixes: ["/api", "/jobs"],
+
+  /**
+   * Header a server-side caller presents to reach the solver without a browser
+   * session. Set INTERNAL_API_TOKEN and the optimisation driver can call the
+   * Python function directly, which keeps the audit trail on the server instead
+   * of trusting the browser to report what it evaluated. Unset, the header is
+   * rejected and only sessions get through.
+   */
+  internalHeader: "x-actprove-internal",
 
   /** Routes that must stay reachable without a session. */
   publicPaths: ["/admin-pro/login", "/auth/login", "/auth/logout"],
@@ -55,7 +67,13 @@ export function isConsoleRequest(pathname: string, host: string | null): boolean
 }
 
 export function isApiRequest(pathname: string): boolean {
-  return pathname === AUTH.apiPrefix || pathname.startsWith(`${AUTH.apiPrefix}/`);
+  return AUTH.gatedPrefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
+/** A server-side caller with the shared token, not a browser. */
+export function isInternalCall(token: string | null): boolean {
+  const expected = process.env.INTERNAL_API_TOKEN;
+  return Boolean(expected && expected.length >= 24 && token === expected);
 }
 
 export function isPublicPath(pathname: string): boolean {

@@ -1,5 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { AUTH, isApiRequest, isConsoleRequest, isPublicPath } from "@/lib/auth/config";
+import {
+  AUTH,
+  isApiRequest,
+  isConsoleRequest,
+  isInternalCall,
+  isPublicPath,
+} from "@/lib/auth/config";
 import { cookieOptions, readSession, shouldRefresh, signSession } from "@/lib/auth/session";
 
 /**
@@ -26,6 +32,13 @@ export async function middleware(req: NextRequest) {
   const gated = (console_ || api) && !isPublicPath(pathname);
 
   if (!gated) return harden(NextResponse.next(), console_);
+
+  // A server-side caller presenting the shared token, so the optimisation
+  // driver can reach the solver without a browser session and the audit trail
+  // stays on the server rather than being reported by the client.
+  if (api && isInternalCall(req.headers.get(AUTH.internalHeader))) {
+    return harden(NextResponse.next(), true);
+  }
 
   const token = req.cookies.get(AUTH.cookieName)?.value;
   const claims = await readSession(token);

@@ -132,12 +132,28 @@ def _integrate(f, n: int = 2000) -> float:
     return total * step
 
 
+def _mac_le_station() -> float:
+    """Leading-edge station of the mean aerodynamic chord.
+
+    x_LE_MAC = (b / S) * integral of c(eta) * x_le(eta) d eta, which is where the
+    quarter-chord datum is measured from.
+    """
+    num = _integrate(lambda e: chord_over_l(e) * le_station(e))
+    return (SPAN_OVER_L / (SPAN_OVER_L * _integrate(chord_over_l))) * num
+
+
 #: Integrals of the chord table, in units of L and L^2. Computed once.
 CHORD_INTEGRAL = _integrate(chord_over_l)
 CHORD_SQ_INTEGRAL = _integrate(lambda e: chord_over_l(e) ** 2)
 AREA_OVER_L2 = SPAN_OVER_L * CHORD_INTEGRAL
 MAC_OVER_L = (SPAN_OVER_L / AREA_OVER_L2) * CHORD_SQ_INTEGRAL if AREA_OVER_L2 > 0 else 0.0
 ASPECT_RATIO = (SPAN_OVER_L * SPAN_OVER_L / AREA_OVER_L2) if AREA_OVER_L2 > 0 else 0.0
+MAC_LE_OVER_L = _mac_le_station()
+
+#: Neutral point, estimated as the quarter chord of the mean aerodynamic chord.
+#: A first-order estimate for a tailless planform, not a measurement, and the
+#: balance readouts inherit that.
+NEUTRAL_POINT_OVER_L = MAC_LE_OVER_L + 0.25 * MAC_OVER_L
 
 
 @dataclass
@@ -153,16 +169,23 @@ class DerivedGeometry:
     mac_over_l: float
 
 
-def derive(length_m: float) -> DerivedGeometry:
-    """Overall length is the only dimensional input. Everything else is measured."""
+def derive(length_m: float, span_stretch: float = 1.0) -> DerivedGeometry:
+    """Overall length is the only dimensional input. Everything else is measured.
+
+    `span_stretch` re-lofts the planform at a different aspect ratio: span times
+    the stretch, every chord divided by it. Reference area is unchanged, mean
+    chord scales inversely, and aspect ratio goes as the square. At 1.0 the
+    shape is exactly as measured, which is the only value that came from CAD.
+    """
     l = max(1e-6, length_m)
+    k = max(1e-6, span_stretch)
     return DerivedGeometry(
         length_m=l,
-        span_m=SPAN_OVER_L * l,
+        span_m=SPAN_OVER_L * l * k,
         area_m2=AREA_OVER_L2 * l * l,
-        mac_m=MAC_OVER_L * l,
-        aspect_ratio=ASPECT_RATIO,
-        span_over_l=SPAN_OVER_L,
+        mac_m=MAC_OVER_L * l / k,
+        aspect_ratio=ASPECT_RATIO * k * k,
+        span_over_l=SPAN_OVER_L * k,
         area_over_l2=AREA_OVER_L2,
-        mac_over_l=MAC_OVER_L,
+        mac_over_l=MAC_OVER_L / k,
     )

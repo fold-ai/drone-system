@@ -30,7 +30,7 @@ def validate_or_raise(af: AirframeSpec) -> DerivedGeometry:
     the drawn shape puts AR wrong, and every range, endurance and L/D figure
     downstream is wrong with it - silently. This turns that into a failure.
     """
-    d = derive(af.length_m)
+    d = derive(af.length_m, af.planform.span_stretch)
     problems: List[str] = []
     for label, supplied, expected in (
         ("span_m", af.span_m, d.span_m),
@@ -99,7 +99,8 @@ class Planform:
 def build(af: AirframeSpec, n_stations: int = 41) -> Planform:
     pf: PlanformSpec = af.planform
     L = max(1e-6, af.length_m)
-    d = derive(L)
+    stretch = max(1e-6, pf.span_stretch)
+    d = derive(L, stretch)
     half = d.span_m / 2.0
 
     stations: List[SpanStation] = []
@@ -108,7 +109,7 @@ def build(af: AirframeSpec, n_stations: int = 41) -> Planform:
     for i in range(n_stations):
         eta = i / (n_stations - 1)
         le = le_station(eta) * L
-        c = chord_over_l(eta) * L
+        c = chord_over_l(eta) * L / stretch
         ell = ell_scale * math.sqrt(max(0.0, 1.0 - eta * eta))
         schrenk = 0.5 * (c + ell)
         stations.append(SpanStation(
@@ -128,14 +129,14 @@ def build(af: AirframeSpec, n_stations: int = 41) -> Planform:
         outline.append((le_station(eta) * L, eta * half))
     for i in range(n_edge, -1, -1):
         eta = i / n_edge
-        outline.append(((le_station(eta) + chord_over_l(eta)) * L, eta * half))
+        outline.append((le_station(eta) * L + chord_over_l(eta) * L / stretch, eta * half))
 
     return Planform(
         span_m=d.span_m, length_m=L, area_m2=d.area_m2, mac_m=d.mac_m,
         aspect_ratio=d.aspect_ratio,
-        root_chord_m=chord_over_l(0.0) * L,
-        tip_chord_m=chord_over_l(1.0) * L,
-        crank_y_m=_interp(HALF_SPAN_BY_STATION, CRANK_STATION) * L,
+        root_chord_m=chord_over_l(0.0) * L / stretch,
+        tip_chord_m=chord_over_l(1.0) * L / stretch,
+        crank_y_m=_interp(HALF_SPAN_BY_STATION, CRANK_STATION) * L * stretch,
         crank_x_m=CRANK_STATION * L,
         tip_le_x_m=le_station(1.0) * L,
         taper_ratio=chord_over_l(1.0) / max(1e-9, chord_over_l(0.0)),
