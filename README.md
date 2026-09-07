@@ -31,6 +31,66 @@ Unmatched URLs, including unknown paths under `/admin-pro`, fall to a catch-all
 in the public group and render the public 404. It confirms nothing about what
 else exists.
 
+## Access
+
+The console is not reachable by guessing the URL. `middleware.ts` gates
+`/admin-pro/*` and `/api/*` and sends unauthenticated page requests to
+`/admin-pro/login`; unauthenticated API requests get 401 JSON instead, because a
+fetch cannot do anything useful with a redirect to an HTML form. The solver is
+gated with the console deliberately: an open solver endpoint hands out the whole
+model to anyone who finds it.
+
+Sessions are a signed JWT in an httpOnly, sameSite lax cookie, secure in
+production. Two clocks: `exp` is thirty minutes and slides forward while the
+operator is active, `sst` records when the session began and does not, so an
+active session still ends at a twelve-hour ceiling. Refreshing cannot extend a
+session indefinitely. Middleware verifies on the Edge and never touches the
+database.
+
+Passwords are argon2id at the OWASP parameters, hashed with `hash-wasm` rather
+than a native binding so there is no prebuilt binary to be missing at deploy
+time. Login is rate limited by address and by account, counted in Postgres
+because a serverless instance's memory is recreated often enough to be no limit
+at all. A wrong password and an unknown account return the same message in
+comparable time, so the endpoint cannot be used to enumerate operators.
+
+Headers: `Content-Security-Policy` permitting the `data:` and `blob:` URLs the
+WebGL canvas and the trajectory decoder need, `Referrer-Policy: no-referrer`,
+`X-Content-Type-Options: nosniff`, and on the console `X-Frame-Options: DENY`
+with `frame-ancestors none`.
+
+### Moving the console to a subdomain
+
+`lib/auth/config.ts` decides what counts as a console request. Set
+`CONSOLE_GATE_STRATEGY=host` and `CONSOLE_HOST=admin.actprove.com` and the gate
+keys off the host header instead of the path. `middleware.ts` never inspects the
+path itself, so that is a configuration change, not a refactor.
+
+### Known gaps
+
+- **No password reset.** There is no email flow, deliberately, rather than a
+  half-built one. A locked-out operator needs someone with database access to
+  write a new argon2id hash into `operators.password_hash`. Add reset when there
+  is a mail sender worth trusting.
+- **No multi-factor.** Single factor only.
+- **Rate-limit rows are never pruned.** `login_attempts` grows without bound.
+  The window query is indexed so it stays fast, but a cleanup job is owed.
+- **`unsafe-inline` and `unsafe-eval`** are in the CSP because the framework
+  needs them. Removing them means nonces on every response, which would make the
+  static marketing page dynamic. The trade is recorded rather than hidden.
+
+## Database
+
+Plain SQL migrations under `db/migrations`, forward-only, one transaction each,
+applied by `npm run migrate`. Steps are `.sql`, or `.mjs` exporting `up(client)`
+for the ones SQL cannot express. `npm run migrate:status` lists what is applied.
+
+The first operator is seeded by `0002_seed_first_operator.mjs`, which reads
+`SEED_OPERATOR_EMAIL` and `SEED_OPERATOR_PASSWORD` from the environment once and
+stores neither. There is no password anywhere in the repository. With the
+variables unset the step records itself as applied and does nothing, which is
+correct on a deployment where the operator already exists.
+
 ---
 
 ## The simulation

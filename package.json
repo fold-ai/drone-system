@@ -12,12 +12,17 @@
     "types": "python3 scripts/gen_types.py",
     "types:check": "python3 scripts/gen_types.py --check",
     "test": "python3 tests/test_physics.py",
-    "checkpoint": "python3 scripts/checkpoint1.py"
+    "checkpoint": "python3 scripts/checkpoint1.py",
+    "migrate": "node db/migrate.mjs",
+    "migrate:status": "node db/migrate.mjs --status"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.8",
     "@react-three/fiber": "^9.7.0",
+    "hash-wasm": "^4.12.0",
+    "jose": "^6.2.12",
     "next": "^15.5.25",
+    "pg": "^8.23.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "three": "^0.185.1",
@@ -27,6 +32,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.14",
     "@types/node": "^22.18.0",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.1",
     "@types/three": "^0.185.0",
