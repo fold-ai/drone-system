@@ -190,6 +190,63 @@ endpoint or a stub.
 Without a key the page still works. The review is commentary; the computed
 results stand on their own.
 
+## Test records
+
+**Saving.** `record` on the console writes the current solve to Postgres with a
+name, notes and an optional pin. The trajectory goes in exactly as the solver
+encoded it, so nothing re-encodes it on the way through. Warnings are stored
+with the severity the console's own classifier gave them, not a second opinion
+computed at save time.
+
+**The library** at `/admin-pro/runs` filters, sorts and compares. Sorting is a
+whitelisted column in Postgres; the free-text filter runs in the browser
+because the list is bounded. Tick two rows and the panel reads B minus A across
+the results and the specification, saying which way each difference went.
+
+Every optimiser evaluation is written to the same table, because a search whose
+rejected candidates are not recorded cannot be audited. There are thousands of
+them, so the library shows deliberately saved runs by default and offers the
+rest behind a filter rather than hiding them.
+
+Two ways back to the console, both reusing the existing hold-as-ref machinery.
+**Load into console** takes the stored specification and solves it again with
+today's solver, which is what you want when reviving an old setup: a run from
+an earlier solver is not comparable with a new one, and re-solving makes that
+explicit. **Hold as ref** replays exactly what was recorded, labelled with the
+version that produced it, and the comparison table shows a figure that was
+never stored as missing rather than as zero.
+
+If the two runs came from different solvers, the comparison says so at the top.
+The geometry rebuild moved every number the project had produced, and a diff
+across that boundary is meaningless.
+
+## Bench data
+
+`/admin-pro/bench` is a page, not a button behind a menu. Comparing the model
+with a measurement is the only thing here that can tell you the model is wrong,
+so it has the same standing as the console and the study.
+
+Load a CSV and the columns are sniffed against what each quantity needs. The
+guess is always shown and always changeable, because reading a stand's "Thrust"
+column as newtons when it wrote pounds-force is a 4.45x error that makes the
+model look badly wrong. Units written into a column name are honoured: kg/h,
+g/s, lbf, kN, ft, kt and percent.
+
+Six quantities are importable today: net thrust, fuel flow, CD, CD0, L/D and
+stall speed. Adding one means adding an entry to `QUANTITIES` in
+`api/_core/validate.py`; the interface reads that list to build its mapping, so
+there is no second place to change.
+
+The model is evaluated at each measured condition by the same modules the
+console uses. The page reports bias, RMS, largest error and the variance
+explained, draws model against measurement so a perfect model is the diagonal,
+and plots the residual against the swept condition so the shape of the error is
+visible. The shape is what says whether the model is wrong or merely offset.
+
+Saving stores the file as uploaded with the mapping beside it, and one
+`validation_points` row per point, so a residual can always be traced back to
+the sheet that produced it.
+
 ## Database
 
 Plain SQL migrations under `db/migrations`, forward-only, one transaction each,

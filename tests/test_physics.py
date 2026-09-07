@@ -821,6 +821,77 @@ def test_a_rejected_design_scores_worse_than_every_real_one():
     note(f"{len(evals)} evaluations, all finite and JSON-safe; rejected designs "
          f"score {search.REJECTED:.0e}")
 
+
+def test_residuals_recover_a_known_bias():
+    """A stand reading 4% high must come back as a 4% residual, and the sign
+    must say which way. A validation page that cannot find a bias someone put
+    there on purpose will not find one that arrived by accident."""
+    from _core.engine import EngineProfile
+    from _core.schema import MissionSpec, from_dict
+    from _core.validate import compare
+
+    spec = from_dict(MissionSpec, {})
+    truth = EngineProfile()
+    lines = ["throttle_pct,thrust_n"]
+    for i in range(11):
+        d = i / 10.0
+        lines.append(f"{d * 100},{truth.net_thrust(RHO0_ISA, 0.0, 0.0, d) * 1.04:.6f}")
+
+    r = compare(spec, "\n".join(lines), "thrust_n",
+                {"thrust_n": "thrust_n", "throttle": "throttle_pct"})
+    assert r.n == 11, r.skipped
+    # Model minus measured, as a fraction of the measurement: -0.04/1.04.
+    assert abs(r.bias_pct - (-100 * 0.04 / 1.04)) < 0.2, r.bias_pct
+    assert r.bias < 0, "the sign must say the model reads low"
+    assert r.r2 > 0.99, r.r2
+    note(f"A 4% high stand reads as bias {r.bias_pct:+.2f}%, rms {r.rms_pct:.2f}%, "
+         f"r2 {r.r2:.4f} across {r.n} points")
+
+
+def test_units_in_a_column_name_are_read():
+    """Bench sheets carry their units in the header far more often than in a
+    units row. Reading kg/h as kg/s is a factor of 3600, which would look like
+    a catastrophically wrong engine rather than a misread column."""
+    from _core.engine import EngineProfile
+    from _core.schema import MissionSpec, from_dict
+    from _core.validate import compare, unit_scale
+
+    assert abs(unit_scale("Fuel flow (kg/h)") - 1.0 / 3600.0) < 1e-12
+    assert abs(unit_scale("thrust_lbf") - 4.4482216152605) < 1e-9
+    assert unit_scale("Thrust (N)") == 1.0
+
+    spec = from_dict(MissionSpec, {})
+    truth = EngineProfile()
+    lines = ["throttle,fuel_flow_kgh"]
+    for i in range(11):
+        d = i / 10.0
+        t = truth.net_thrust(RHO0_ISA, 0.0, 0.0, d)
+        lines.append(f"{d},{truth.fuel_flow(t, d) * 3600.0:.8f}")
+
+    r = compare(spec, "\n".join(lines), "fuel_flow_kgs",
+                {"fuel_flow_kgs": "fuel_flow_kgh", "throttle": "throttle"})
+    assert r.n == 11
+    assert r.rms < 1e-9, f"kg/h was not converted: rms {r.rms}"
+    note("kg/h, lbf and percent are read from the column name; a kg/h column "
+         "compares to zero error against the deck that produced it")
+
+
+def test_a_column_the_operator_did_not_map_is_an_error():
+    """Silently defaulting a required condition would produce residuals against
+    an aircraft nobody asked about."""
+    from _core.schema import MissionSpec, from_dict
+    from _core.validate import compare
+
+    spec = from_dict(MissionSpec, {})
+    csv_text = "mach,cd\n0.2,0.030\n0.5,0.032\n"
+    try:
+        compare(spec, csv_text, "cd", {"cd": "cd"})
+    except ValueError as exc:
+        assert "Lift coefficient" in str(exc), exc
+        note(f"an unmapped required condition refuses to run: {exc}")
+    else:
+        raise AssertionError("a missing required condition was accepted")
+
 # ==========================================================================
 
 def main() -> int:

@@ -11,6 +11,7 @@ import { EventStrip } from "@/components/timeline/EventStrip";
 import { ScheduleEditor } from "@/components/timeline/ScheduleEditor";
 import { ThrottleLever } from "@/components/timeline/ThrottleLever";
 import { PlaybackDriver, Timeline } from "@/components/timeline/Timeline";
+import { SaveRecord } from "@/components/records/SaveRecord";
 import { Brand } from "@/components/ui/Brand";
 import { Button } from "@/components/ui/Button";
 import { KeyMap } from "@/components/ui/KeyMap";
@@ -38,7 +39,27 @@ export default function Console() {
   const setDiagnosticsOpen = useSim((s) => s.setDiagnosticsOpen);
   const setKeymapOpen = useSim((s) => s.setKeymapOpen);
   const connectBroadcast = useSim((s) => s.connectBroadcast);
+  const loadRecord = useSim((s) => s.loadRecord);
   useEffect(() => connectBroadcast(), [connectBroadcast]);
+
+  // A record handed over from the run library. Read once and cleared, so a
+  // reload does not silently replay someone else's run.
+  useEffect(() => {
+    let raw: string | null = null;
+    try {
+      raw = window.sessionStorage.getItem("act1.record");
+      if (raw) window.sessionStorage.removeItem("act1.record");
+    } catch {
+      return;
+    }
+    if (!raw) return;
+    try {
+      const { id, as } = JSON.parse(raw) as { id: string; as: "spec" | "ref" };
+      if (id) void loadRecord(id, as === "ref" ? "ref" : "spec");
+    } catch {
+      /* a malformed hand-off is not a reason to fail the console */
+    }
+  }, [loadRecord]);
 
   const left = useResizable(300, 220, 520, "left");
   const right = useResizable(370, 280, 620, "right");
@@ -72,11 +93,15 @@ export default function Console() {
           <Button onClick={() => setKeymapOpen(true)} title="Keyboard map  [?]">
             ?
           </Button>
-          <Button onClick={() => downloadJson(spec)} title="Save this configuration as JSON">
-            save
+          <SaveRecord />
+          <Button
+            onClick={() => downloadJson(spec)}
+            title="Download this configuration as a JSON file"
+          >
+            export
           </Button>
-          <Button onClick={() => file.current?.click()} title="Load a saved configuration">
-            load
+          <Button onClick={() => file.current?.click()} title="Open a configuration JSON file">
+            import
           </Button>
           <input
             ref={file}

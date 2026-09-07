@@ -15,6 +15,10 @@ const PAGES = [
     title: "Drag breakdown, sensitivity and parameter sweeps" },
   { key: "optimise", href: "/admin-pro/optimise", label: "optimise",
     title: "Search the design space against a declared objective" },
+  { key: "runs", href: "/admin-pro/runs", label: "run library",
+    title: "Saved test records, with filtering, sorting and comparison" },
+  { key: "bench", href: "/admin-pro/bench", label: "bench data",
+    title: "Measured bench and flight data against the model" },
 ] as const;
 
 export type PageKey = (typeof PAGES)[number]["key"];

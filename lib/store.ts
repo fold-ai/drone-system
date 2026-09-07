@@ -96,6 +96,19 @@ interface State {
   setDiagnosticsOpen: (v: boolean) => void;
   promoteToGhost: () => void;
   clearGhost: () => void;
+  /**
+   * Bring a saved test record back.
+   *
+   * "spec" loads its configuration and solves it again with today's solver,
+   * which is what you want when reviving an old setup: a stored run from an
+   * earlier solver version is not comparable with a new one, and re-solving
+   * makes that explicit rather than hiding it.
+   *
+   * "ref" reconstructs the stored trajectory as the comparison ghost, labelled
+   * with the solver version that produced it, so a cross-version comparison is
+   * visible on the screen rather than assumed away.
+   */
+  loadRecord: (id: string, as: "spec" | "ref") => Promise<void>;
   setAeroDetached: (v: boolean) => void;
   setParamsOpen: (v: boolean) => void;
   connectBroadcast: () => void;
@@ -404,6 +417,89 @@ export const useSim = create<State>((set, get) => ({
     if (run) set({ ghost: { ...run, label: `${run.label} (ref)` }, showGhost: true });
   },
   clearGhost: () => set({ ghost: null }),
+
+  async loadRecord(id, as) {
+    const { decodeTrajectory } = await import("./playback");
+    set({ error: null, errorDetail: "" });
+    try {
+      const res = await fetch(`/jobs/runs?id=${encodeURIComponent(id)}`);
+      const json = (await res.json()) as {
+        ok: boolean;
+        run?: Record<string, unknown>;
+        events?: { t_s: number; kind: string; label: string; detail: string | null }[];
+        trajectory?: { format: string; columns: string[]; n: number; stride: number; data: string } | null;
+        error?: string;
+      };
+      if (!json.ok || !json.run) throw new Error(json.error ?? "could not load the record");
+      const spec = json.run.spec_json as MissionSpec;
+
+      if (as === "spec") {
+        set({ spec: clone(spec) });
+        await get().run_();
+        return;
+      }
+
+      if (!json.trajectory) {
+        throw new Error("That record was saved without its sample history, so it cannot be a reference.");
+      }
+      const cols = await decodeTrajectory({
+        format: json.trajectory.format,
+        columns: json.trajectory.columns as never,
+        n: json.trajectory.n,
+        stride: json.trajectory.stride,
+        data: json.trajectory.data,
+      });
+      const t = cols.t ?? new Float32Array(0);
+      const version = String(json.run.solver_version ?? "unknown");
+      const ghost: Run = {
+        id,
+        label: `${String(json.run.name ?? "record")} (ref, solver ${version})`,
+        spec,
+        // Only the columns that were stored. A ghost is drawn from its
+        // trajectory and its headline figures; the rest of the summary was
+        // never persisted and is not invented here.
+        summary: {
+          solver_version: version,
+          ground_range_km: Number(json.run.range_km ?? 0),
+          endurance_s: Number(json.run.endurance_s ?? 0),
+          best_ld: Number(json.run.ld_max ?? 0),
+          max_mach: Number(json.run.max_mach ?? 0),
+          max_altitude_m: Number(json.run.max_altitude_m ?? 0),
+          max_q_pa: Number(json.run.max_q_pa ?? 0),
+          max_load_factor: Number(json.run.max_load_factor ?? 0),
+          min_static_margin: Number(json.run.min_static_margin ?? 0),
+          n_samples: json.trajectory.n,
+        } as unknown as Run["summary"],
+        events: (json.events ?? []).map((e) => ({
+          t: e.t_s, kind: e.kind, label: e.label, severity: "info", detail: e.detail ?? "",
+        })),
+        fuel: null as never,
+        // Only what run_summary actually holds. The rest of the launch record
+        // was never stored, and the comparison table shows a missing figure as
+        // missing rather than as zero.
+        launch: (json.run.v_rail_exit_ms === null || json.run.v_rail_exit_ms === undefined
+          ? null
+          : { v_exit_ms: Number(json.run.v_rail_exit_ms) }) as unknown as Run["launch"],
+        mach1: null as never,
+        machSweep: [],
+        resolved: null as never,
+        derived: null as never,
+        warnings: [],
+        cols,
+        n: json.trajectory.n,
+        t0: t.length ? t[0] : 0,
+        t1: t.length ? t[t.length - 1] : 0,
+        solvedAt: Date.now(),
+        roundTripMs: 0,
+      };
+      set({ ghost, showGhost: true });
+    } catch (err) {
+      set({
+        error: "Could not load that record.",
+        errorDetail: err instanceof Error ? err.message : String(err),
+      });
+    }
+  },
   connectBroadcast: () => {
     ensureChannel();
   },

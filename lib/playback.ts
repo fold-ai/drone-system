@@ -47,6 +47,17 @@ export interface Run {
   t1: number;
   solvedAt: number;
   roundTripMs: number;
+  /**
+   * The trajectory exactly as the solver sent it: deflated, byte-plane
+   * shuffled, base64. Kept so a run can be stored verbatim rather than
+   * re-encoded here, which would be a second implementation of the wire format
+   * and would drift from the first one.
+   *
+   * Absent on a run rebuilt from a cross-tab broadcast, which carries decoded
+   * columns and never the original bytes. Such a run can be compared against
+   * but not stored.
+   */
+  encoded?: EncodedTrajectory;
 }
 
 export type Sample = Record<TrajectoryColumn, number>;
@@ -139,6 +150,7 @@ export async function toRun(
     t1: t.length ? t[t.length - 1] : 0,
     solvedAt: Date.now(),
     roundTripMs,
+    encoded: res.trajectory,
   };
 }
 

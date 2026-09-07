@@ -135,7 +135,10 @@ input[type="number"],
 input[type="text"],
 input[type="email"],
 input[type="password"],
-input[type="search"] {
+input[type="search"],
+input[type="date"],
+select,
+textarea {
   background: var(--color-void);
   border: 1px solid var(--color-rule);
   color: var(--color-bright);
@@ -146,7 +149,18 @@ input[type="search"] {
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 input[type="number"] { -moz-appearance: textfield; }
-input::placeholder { color: var(--color-dim); }
+input::placeholder,
+textarea::placeholder { color: var(--color-dim); }
+
+/* The date picker's own glyph is drawn near-black on black by default. */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 0.45;
+  cursor: pointer;
+}
+input[type="date"]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
+select { padding-right: 2px; }
+option { background: var(--color-panel); color: var(--color-bright); }
 
 input[type="checkbox"] {
   appearance: none;

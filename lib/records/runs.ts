@@ -195,6 +195,9 @@ export interface RunRow {
   endurance_s: number | null;
   ld_max: number | null;
   max_mach: number | null;
+  v_rail_exit_ms: number | null;
+  max_load_factor: number | null;
+  min_static_margin: number | null;
   feasible: boolean;
   warning_count: number;
   has_trajectory: boolean;
@@ -241,7 +244,8 @@ export async function listRuns(opts: {
   return query<RunRow>(
     `SELECT r.id, r.name, r.kind, r.created_at, r.solver_version, r.git_sha,
             r.airframe_id, a.name AS airframe_name,
-            s.range_km, s.endurance_s, s.ld_max, s.max_mach, s.feasible, s.warning_count,
+            s.range_km, s.endurance_s, s.ld_max, s.max_mach, s.v_rail_exit_ms,
+            s.max_load_factor, s.min_static_margin, s.feasible, s.warning_count,
             (t.run_id IS NOT NULL) AS has_trajectory
        FROM runs r
        JOIN run_summary s ON s.run_id = r.id
