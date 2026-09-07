@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter_Tight, JetBrains_Mono } from "next/font/google";
-import "./globals.css";
+import "./console.css";
 
 const interTight = Inter_Tight({
   subsets: ["latin"],
@@ -29,10 +29,17 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+/**
+ * Root layout for the console.
+ *
+ * The second of two root layouts. Tailwind and the instrument palette are
+ * imported here and nowhere else, so the marketing site never loads them and is
+ * never restyled by them.
+ */
+export default function ConsoleRootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${interTight.variable} ${jetbrainsMono.variable}`}>
-      <body className="h-full bg-void text-bright antialiased">{children}</body>
+      <body className="h-full">{children}</body>
     </html>
   );
 }

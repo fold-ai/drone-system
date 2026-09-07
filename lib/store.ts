@@ -8,7 +8,7 @@
 "use client";
 
 import { create } from "zustand";
-import { feasibility, solve, SolverError, type FeasibilityOptions } from "@/app/api-client";
+import { feasibility, solve, SolverError, type FeasibilityOptions } from "@/lib/api-client";
 import * as bc from "./broadcast";
 import { indexAt, sampleAt, spliceRun, type Run } from "./playback";
 import {

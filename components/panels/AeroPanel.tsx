@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { feasibility } from "@/app/api-client";
+import { feasibility } from "@/lib/api-client";
 import { css } from "@/lib/colormap";
 import { EmptyState } from "@/components/panels/ErrorPanel";
 import { Panel } from "@/components/ui/Panel";
@@ -39,7 +39,7 @@ export function AeroPanel({ detached = false }: { detached?: boolean }) {
             type="button"
             onClick={() => {
               const w = window.open(
-                "/aero",
+                "/admin-pro/aero",
                 "act1-aero",
                 "width=520,height=940,menubar=no,toolbar=no,location=no,status=no",
               );

@@ -1,8 +1,8 @@
 {
-  "name": "act1-sim",
+  "name": "actprove",
   "version": "1.0.0",
   "private": true,
-  "description": "Flight-performance simulation and test platform for the ACT-1 UAV",
+  "description": "Actprove Defense Technologies: public site and the ACT-1 flight-test console",
   "scripts": {
     "dev": "concurrently -n api,web -c gray,white \"npm:dev:api\" \"next dev\"",
     "dev:api": "python3 scripts/dev_api.py",

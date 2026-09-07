@@ -9,7 +9,7 @@
 "use client";
 
 import { create } from "zustand";
-import { study as fetchStudy, SolverError } from "@/app/api-client";
+import { study as fetchStudy, SolverError } from "@/lib/api-client";
 import {
   DEFAULT_MISSION_SPEC,
   type MissionSpec,

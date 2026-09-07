@@ -49,7 +49,7 @@ export function Brand({
       )}
       {nav && (
         <a
-          href={nav === "console" ? "/study" : "/"}
+          href={nav === "console" ? "/admin-pro/study" : "/admin-pro"}
           className="hit border border-rule px-1.5 py-0.5 text-[10px] text-dim hover:border-dim hover:text-bright"
           title={
             nav === "console"

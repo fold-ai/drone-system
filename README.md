@@ -1,7 +1,41 @@
-# ACT-1 SIM
+# Actprove
+
+One Next.js application, one deployment, one domain.
+
+    /                 public marketing site, ships as it was written
+    /admin-pro        ACT-1 flight-test console
+    /admin-pro/aero   detached aerodynamics window
+    /admin-pro/study  airframe study
+    /api/*.py         Python solver, Vercel serverless functions
+
+## Two design systems in one app
+
+The site and the console look nothing alike and neither may restyle the other.
+They are separate root layouts under route groups, `app/(public)` and
+`app/(console)`, each importing its own stylesheet and its own font pair. The
+App Router only ships the CSS a route's own tree imports, so the marketing page
+never loads Tailwind or the instrument palette and the console never loads the
+site's. The build confirms it: `/` pulls one stylesheet with Archivo and the
+site tokens, `/admin-pro` pulls another with Inter Tight, Tailwind and the
+console tokens, and neither contains the other's.
+
+The console's fixed-viewport rules sit on `.console-root` rather than on `body`,
+so even if both stylesheets were ever served together the instrument panel could
+not reach a page outside it.
+
+The marketing site stays JSX. `allowJs` is on so TypeScript can resolve those
+modules for Next's generated route types; `checkJs` is off, so the JavaScript is
+never type-checked and never needed rewriting.
+
+Unmatched URLs, including unknown paths under `/admin-pro`, fall to a catch-all
+in the public group and render the public 404. It confirms nothing about what
+else exists.
+
+---
+
+## The simulation
 
 Internal flight-performance simulation and test platform for the ACT-1 UAV.
-Actprove Defense Technologies.
 
 A carbon-composite, turbojet-powered UAV is modelled from rail launch through
 climb, acceleration, cruise and descent. Every number on screen comes from the

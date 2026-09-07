@@ -33,13 +33,23 @@
   --head-h: 44px;
 }
 
-* {
+.console-root *,
+.console-root *::before,
+.console-root *::after {
   border-radius: 0;
 }
 
+/* The console is a fixed-viewport instrument panel. These rules are scoped to
+   its own subtree rather than to html and body, so nothing here can reach a
+   page rendered outside the console even if both stylesheets are ever served
+   together. */
 html,
 body {
   height: 100%;
+}
+
+.console-root {
+  height: 100dvh;
   overflow: hidden;
   background: var(--color-void);
   color: var(--color-bright);
