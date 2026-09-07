@@ -79,6 +79,58 @@ path itself, so that is a configuration change, not a refactor.
   needs them. Removing them means nonces on every response, which would make the
   static marketing page dynamic. The trade is recorded rather than hidden.
 
+## Geometry, and a break in comparability
+
+The planform is measured from the plan-view CAD render and lives in
+`api/_core/geometry_ratios.py` as two tables: half-span against station, which
+fixes the leading edge, and chord against span fraction, which fixes the
+trailing edge from it. Reference area and mean aerodynamic chord are integrals
+of those tables, so they cannot drift away from the drawn shape.
+
+    b/L    0.722        S/L^2  0.368        MAC/L  0.591        AR  1.42
+
+**The render carries no dimensions.** Overall length is the one dimensional
+input and everything else is a ratio of it. The console states the assumed
+length in its header, next to the span and area it implies, because that
+assumption sits under every number on the screen. Nothing derived from it should
+ever be presented as a CAD dimension.
+
+`scripts/gen_types.py` generates the same tables into
+`lib/planform-measured.mjs`, which recomputes the integrals in JavaScript rather
+than copying the results. A test compares the two implementations; they agree to
+machine precision.
+
+A supplied span, area or mean chord more than 2% from the measured planform now
+**refuses to solve**. A wrong reference area puts the induced-drag factor wrong
+and every range figure downstream with it, silently. Better a failure.
+
+### Migration note: runs from before this change are not comparable
+
+The specification previously carried span 1.10 m, area 0.30 m2 and length 2.00 m,
+which is aspect ratio 4.03. The drawn aircraft is 1.42. Induced drag scales as
+1 / (pi AR e), so the factor was wrong by 2.85, and the reference area the whole
+polar is written against was wrong by a factor of five.
+
+Every number the project produced before this commit used that geometry. They
+are not comparable with anything produced after it:
+
+| | Before, AR 4.03 | After, measured AR 1.42 |
+|---|---|---|
+| Reference area at 2 m length | 0.300 m2 | 1.471 m2 |
+| Span | 1.100 m | 1.444 m |
+| Mean aerodynamic chord | 0.273 m | 1.183 m |
+| Induced-drag factor k | 0.1096 | 0.3119 |
+| L/D max | 9.75 | 5.78 |
+| Max level Mach, 15 kg at 3000 m | 0.599 | 0.298 |
+| Stall speed at 15 kg, sea level | 29.8 m/s | 13.5 m/s |
+| Booster impulse, 3 m rail | 425 N s | 190 N s |
+| Thrust shortfall at M 1.0 | 11.5x | 56.4x |
+
+Stored runs from before this change carry the old reference geometry. This is
+why `runs` records `solver_version` and `git_sha`: without them the history
+becomes uninterpretable the first time the physics moves, and it just moved.
+Treat anything recorded earlier as a different aircraft.
+
 ## Database
 
 Plain SQL migrations under `db/migrations`, forward-only, one transaction each,

@@ -9,6 +9,7 @@ import { SectionInspector } from "@/components/study/SectionInspector";
 import { SweepExplorer } from "@/components/study/SweepExplorer";
 import { StudyControls } from "@/components/study/StudyControls";
 import { Brand } from "@/components/ui/Brand";
+import { ScaleBadge } from "@/components/ui/ScaleBadge";
 import { useResizable, VDivider } from "@/components/ui/Split";
 import * as bc from "@/lib/broadcast";
 import { fixed } from "@/lib/format";
@@ -65,10 +66,9 @@ export default function Study() {
     <main className="flex h-dvh w-dvw flex-col overflow-hidden bg-void">
       <header className="flex h-11 shrink-0 items-center gap-4 rule-b bg-panel px-3">
         <Brand product="AIRFRAME STUDY" nav="study" />
+        <ScaleBadge lengthM={spec.airframe.length_m} />
         <span className="num text-[11px] text-dim">
-          AR {fixed((spec.airframe.span_m * spec.airframe.span_m) / spec.airframe.wing_area_m2, 2)}{" "}
-          &middot; S {fixed(spec.airframe.wing_area_m2, 3)} m2 &middot; CD0{" "}
-          {fixed(spec.airframe.cd0_sub * 1e4, 0)} ct
+          CD0 {fixed(spec.airframe.cd0_sub * 1e4, 0)} ct
         </span>
         <span className="num ml-auto text-[10px] text-dim">
           {polarJob.phase === "running" ? "solving" : `${fixed(polarJob.ms, 0)} ms`}

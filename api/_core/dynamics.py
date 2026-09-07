@@ -41,6 +41,7 @@ from .launch import feasibility as launch_feasibility
 from .launch import run_rail
 from .mission import (eval_schedule, fill_grids, resolve_profile, size_mission)
 from .performance import mach1_deficit, mach_sweep
+from .planform import validate_or_raise
 from .schema import (FlightEvent, MissionSpec, SimulationResult, Trajectory,
                      TrajectorySummary)
 
@@ -79,6 +80,11 @@ def simulate(spec: MissionSpec) -> SimulationResult:
     af, eng, atm, ls, mp, ctl, itg = (spec.airframe, spec.engine, spec.atmosphere,
                                       spec.launch, spec.mission, spec.control,
                                       spec.integration)
+    # Refuse before integrating anything. A reference area that does not match
+    # the drawn planform puts the induced-drag factor wrong, and every number
+    # this function returns would be wrong with it.
+    validate_or_raise(af)
+
     d_isa = atm.delta_isa_k
     wind = atm.headwind_ms
     h_ground = atm.ground_altitude_m

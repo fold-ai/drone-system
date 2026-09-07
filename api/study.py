@@ -26,6 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _core import study                                                  # noqa: E402
 from _core.httputil import guarded, read_json, send                      # noqa: E402
 from _core.planform import build as build_planform                       # noqa: E402
+from _core.planform import validate_or_raise                              # noqa: E402
 from _core.planform import reconcile                                     # noqa: E402
 from _core.schema import MissionSpec, from_dict, to_dict                 # noqa: E402
 
@@ -38,6 +39,7 @@ def _run(handler: BaseHTTPRequestHandler, body: dict) -> None:
     spec = from_dict(MissionSpec, body)
     af = spec.airframe
 
+    validate_or_raise(spec.airframe)
     if op == "polar":
         alt = float(args.get("altitude_m", spec.mission.cruise_altitude_m))
         mass = float(args.get("mass_kg", af.mass_dry_kg + 0.5 * af.fuel_capacity_kg))

@@ -14,6 +14,7 @@ import { PlaybackDriver, Timeline } from "@/components/timeline/Timeline";
 import { Brand } from "@/components/ui/Brand";
 import { Button } from "@/components/ui/Button";
 import { KeyMap } from "@/components/ui/KeyMap";
+import { ScaleBadge } from "@/components/ui/ScaleBadge";
 import { RoundTripSparkline, RunButton } from "@/components/ui/SolveStatus";
 import { CollapseTab, HDivider, useResizable, VDivider } from "@/components/ui/Split";
 import { Scene } from "@/components/viewport/Scene";
@@ -59,6 +60,7 @@ export default function Console() {
         <span className="num text-[11px] text-dim">
           {spec.label} &middot; {spec.config_name}
         </span>
+        <ScaleBadge />
         {run && (
           <span className="num text-[10px] text-dim">
             {run.summary.n_samples} samples &middot; solver {fixed(run.summary.solve_ms, 0)} ms

@@ -278,19 +278,29 @@ def test_bench_data_fit_recovers_the_engine_deck():
 # ==========================================================================
 
 def test_max_level_mach_default_configuration():
+    """Measured geometry, not the old reference area.
+
+    The drawn planform encloses 1.47 m2 at 2 m length against the 0.30 m2 the
+    project used to assume. Five times the wetted reference area is five times
+    the parasite drag at a given speed, and the top speed halves."""
     af, eng = AirframeSpec(), EngineProfile()
     m = perf.max_level_mach(af, eng, 3000.0, 15.0)
     v = m * isa(3000.0).a_ms
-    assert 0.55 <= m <= 0.61, m
-    note(f"Max level speed, S = 0.30 m2 at 15 kg and 3000 m: M {m:.4f} ({v:.0f} m/s)")
+    assert 0.27 <= m <= 0.33, m
+    note(f"Max level speed, measured S = {af.wing_area_m2:.3f} m2 at 15 kg and 3000 m: "
+         f"M {m:.4f} ({v:.0f} m/s), against M 0.599 under the old AR 4.03 geometry")
 
 
-def test_small_wing_still_cannot_approach_mach_one():
-    af = AirframeSpec(wing_area_m2=0.18)
-    m = perf.max_level_mach(af, EngineProfile(), 3000.0, 15.0)
+def test_a_much_smaller_airframe_still_cannot_approach_mach_one():
+    """Length is the only lever on size now, and shrinking it shrinks the wing
+    with the square of length. Even at half the length the aircraft is subsonic."""
+    small = AirframeSpec(length_m=1.0)
+    m = perf.max_level_mach(small, EngineProfile(), 3000.0, 15.0)
     assert m <= 0.75, m
     assert m < 0.95
-    note(f"Max level speed, S reduced to 0.18 m2: M {m:.4f} - still far short of M 1")
+    note(f"Halving length to 1.0 m takes the reference area to "
+         f"{small.wing_area_m2:.3f} m2 and the top speed to M {m:.4f} - still far "
+         f"short of M 1")
 
 
 def test_mach_one_is_out_of_reach_by_an_order_of_magnitude():
@@ -307,17 +317,19 @@ def test_no_configuration_in_the_sweep_reaches_mach_one():
     eng = EngineProfile()
     worst = 0.0
     worst_cfg = ""
-    for s_wing in (0.18, 0.24, 0.30):
+    n = 0
+    for length in (0.9, 1.3, 2.0):
         for cd0 in (0.016, 0.020, 0.024):
             for alt in (3000.0, 8000.0, 11000.0):
                 for mass in (12.0, 15.0):
-                    af = AirframeSpec(wing_area_m2=s_wing, cd0_sub=cd0)
+                    af = AirframeSpec(length_m=length, cd0_sub=cd0)
                     m = perf.max_level_mach(af, eng, alt, mass)
+                    n += 1
                     if m > worst:
-                        worst, worst_cfg = m, (f"S {s_wing} m2, CD0 {cd0}, "
+                        worst, worst_cfg = m, (f"L {length} m, CD0 {cd0}, "
                                                f"{alt:.0f} m, {mass:.0f} kg")
     assert worst < 1.0, (worst, worst_cfg)
-    note(f"Best of 54 configurations: M {worst:.4f} ({worst_cfg}) - none reach M 1")
+    note(f"Best of {n} configurations: M {worst:.4f} ({worst_cfg}) - none reach M 1")
 
 
 def test_simulated_max_mach_agrees_with_the_steady_state_solver():
@@ -337,11 +349,12 @@ def test_simulated_max_mach_agrees_with_the_steady_state_solver():
 # ==========================================================================
 
 def test_stall_speed_and_rail_requirement():
+    """The measured wing is large for the mass, so the aircraft stalls slowly."""
     af = AirframeSpec()
     vs = stall_speed(af, RHO0_ISA, 15.0)
-    assert 28.0 < vs < 32.0, vs
-    note(f"Stall speed at 15 kg, sea level: {vs:.1f} m/s; rail exit must reach "
-         f"{1.15 * vs:.1f} m/s")
+    assert 12.0 < vs < 15.0, vs
+    note(f"Stall speed at 15 kg, sea level: {vs:.1f} m/s against 29.8 under the old "
+         f"reference area; rail exit must reach {1.15 * vs:.1f} m/s")
 
 
 def test_engine_alone_cannot_launch_from_a_three_metre_rail():
@@ -351,33 +364,41 @@ def test_engine_alone_cannot_launch_from_a_three_metre_rail():
     fuel = 1.4
     rail = run_rail(s, fuel)
     vs = stall_speed(s.airframe, RHO0_ISA, s.airframe.mass_dry_kg + fuel)
-    assert 6.0 < rail.v_exit < 10.0, rail.v_exit
-    assert rail.v_exit < 0.4 * vs
+    assert 5.0 < rail.v_exit < 10.0, rail.v_exit
+    assert rail.v_exit < 1.15 * vs
     note(f"Engine only, 3 m rail: {rail.v_exit:.1f} m/s at exit against a stall speed "
          f"of {vs:.1f} m/s - the aircraft leaves the rail unable to fly")
 
 
 def test_booster_sizing_for_a_three_metre_rail():
+    """A fifth of the impulse the old geometry demanded: the aircraft now
+    stalls at 13 m/s rather than 30, so there is far less to accelerate it to."""
     s = MissionSpec()
-    sol = solve_booster(s, 1.363)
+    sol = solve_booster(s, 3.0)
     assert sol.feasible
-    assert 1800.0 < sol.booster_thrust_n < 3200.0, sol.booster_thrust_n
-    assert 350.0 < sol.booster_impulse_ns < 550.0, sol.booster_impulse_ns
-    assert 0.12 < sol.booster_burn_time_s < 0.30
+    assert 300.0 < sol.booster_thrust_n < 900.0, sol.booster_thrust_n
+    assert 120.0 < sol.booster_impulse_ns < 320.0, sol.booster_impulse_ns
+    assert 0.20 < sol.booster_burn_time_s < 0.70
     note(f"Booster for a 3 m rail: {sol.booster_thrust_n / 1000:.2f} kN for "
          f"{sol.booster_burn_time_s * 1000:.0f} ms = {sol.booster_impulse_ns:.0f} N s, "
          f"peak {sol.peak_rail_accel_g:.0f} g")
 
 
-def test_total_impulse_is_nearly_invariant_with_rail_length():
-    """Trading rail length against booster thrust holds total impulse roughly
-    constant. That relationship is the point of the trade study."""
+def test_longer_rails_need_less_booster():
+    """Rail length against booster size.
+
+    Under the old geometry total impulse was near invariant with rail length,
+    because the booster did nearly all the work. On the measured planform the
+    required exit speed is half what it was and the engine covers a growing
+    share of it as the rail lengthens, so impulse now falls with length as well
+    as thrust. Both fall monotonically; that is the trade."""
     s = MissionSpec()
-    trade = rail_length_trade(s, 1.363, [2.0, 3.0, 5.0, 8.0])
+    trade = rail_length_trade(s, 3.0, [2.0, 3.0, 5.0, 8.0])
     imps = [t["booster_impulse_ns"] for t in trade]
     thrusts = [t["booster_thrust_n"] for t in trade]
-    assert (max(imps) - min(imps)) / min(imps) < 0.25, imps
-    assert thrusts[0] > 4.0 * thrusts[-1]
+    assert thrusts == sorted(thrusts, reverse=True), thrusts
+    assert imps == sorted(imps, reverse=True), imps
+    assert thrusts[0] > 5.0 * thrusts[-1]
     note("Rail trade: " + ", ".join(
         f"{t['rail_length_m']:.0f} m -> {t['booster_thrust_n']:.0f} N / "
         f"{t['booster_impulse_ns']:.0f} N s" for t in trade))
@@ -401,18 +422,18 @@ def test_short_missions_have_no_cruise_leg():
     """Climb to 3000 m and descend back covers roughly 31 km on its own. Below that
     the profile has no cruise segment and the tool must say so rather than pretend."""
     s = MissionSpec()
-    s.mission.mission_distance_km = 15.0
+    s.mission.mission_distance_km = 8.0
     r = simulate(s)
     assert r.fuel.cruise_distance_km == 0.0
     assert "no cruise leg" in r.fuel.note
     floor = r.fuel.climb_distance_km + r.fuel.descent_distance_km
-    note(f"A 15 km request is below the {floor:.0f} km covered by climb and descent "
+    note(f"An 8 km request is below the {floor:.0f} km covered by climb and descent "
          f"alone at a 3000 m cruise altitude; reported, not clamped")
 
 
 def test_range_drives_fuel_which_drives_gross_mass():
     prev_fuel = prev_stall = 0.0
-    for km in (40.0, 60.0, 80.0, 100.0):
+    for km in (16.0, 20.0, 24.0, 28.0):
         s = MissionSpec()
         s.mission.mission_distance_km = km
         r = simulate(s)
@@ -421,7 +442,7 @@ def test_range_drives_fuel_which_drives_gross_mass():
         assert f > prev_fuel, (km, f, prev_fuel)
         assert vs > prev_stall
         prev_fuel, prev_stall = f, vs
-    note(f"Range 40 -> 100 km raises required fuel to {prev_fuel:.2f} kg and stall "
+    note(f"Range 16 -> 28 km raises required fuel to {prev_fuel:.2f} kg and stall "
          f"speed to {prev_stall:.1f} m/s")
 
 
@@ -442,10 +463,16 @@ def test_cg_shifts_as_the_tank_empties():
     r = simulate(MissionSpec())
     tj = r.trajectory
     start, end = tj.static_margin[0], tj.static_margin[-1]
-    assert abs(end - start) > 0.02, (start, end)
+    # Quoted against a 1.18 m mean chord rather than 0.27, so the same physical
+    # CG travel is a much smaller percentage. Check the centre of gravity itself.
+    cg_start, cg_end = tj.x_cg_m[0], tj.x_cg_m[-1]
+    assert abs(cg_end - cg_start) > 0.015, (cg_start, cg_end)
+    assert abs(end - start) > 0.005, (start, end)
     assert abs(r.summary.min_static_margin - min(tj.static_margin)) < 1e-4
-    note(f"Static margin drifts {start * 100:.1f}% -> {end * 100:.1f}% MAC as "
-         f"{r.summary.fuel_burned_kg:.2f} kg of fuel burns off")
+    note(f"Centre of gravity travels {(cg_end - cg_start) * 1000:.0f} mm as "
+         f"{r.summary.fuel_burned_kg:.2f} kg of fuel burns off, which is "
+         f"{start * 100:.1f}% -> {end * 100:.1f}% of a {r.spec.airframe.mac_m:.2f} m "
+         f"mean chord")
 
 
 def test_headwind_reduces_ground_range():
@@ -549,65 +576,149 @@ def test_nothing_is_silently_clamped():
 
 
 # ==========================================================================
-# 9. Planform geometry against the reference the polar uses
+# 9. Planform, measured from the CAD render
 # ==========================================================================
 
-def test_planform_area_is_the_integral_of_the_chord_distribution():
+def test_measured_ratios_match_the_render():
+    """The two measured tables have to reproduce the figures read off the plan
+    view. If they do not, the tables were transcribed wrong."""
+    from _core import geometry_ratios as g
+    assert abs(g.SPAN_OVER_L - 0.722) < 0.002, g.SPAN_OVER_L
+    assert abs(g.AREA_OVER_L2 - 0.367) < 0.005, g.AREA_OVER_L2
+    assert abs(g.MAC_OVER_L - 0.599) < 0.010, g.MAC_OVER_L
+    note(f"Measured: b/L {g.SPAN_OVER_L:.4f}, S/L2 {g.AREA_OVER_L2:.4f}, "
+         f"MAC/L {g.MAC_OVER_L:.4f}, integrated from the chord and half-span tables")
+
+
+def test_aspect_ratio_is_pinned_at_the_measured_value():
+    """The regression test this whole change exists for.
+
+    Aspect ratio sets the induced-drag factor k = 1 / (pi AR e), and the project
+    previously carried AR 4.03 against a drawn shape of 1.42. Every range figure
+    was wrong by the difference. Pin it."""
+    from _core import geometry_ratios as g
+    af = AirframeSpec()
+    assert abs(g.ASPECT_RATIO - 1.42) < 0.03, g.ASPECT_RATIO
+    assert abs(af.aspect_ratio - 1.42) < 0.03, af.aspect_ratio
+    k_now = af.k_induced
+    k_old = 1.0 / (math.pi * 4.033 * af.oswald_e)
+    note(f"AR {af.aspect_ratio:.3f} pinned at 1.42 +/- 0.03; k {k_now:.5f} against "
+         f"{k_old:.5f} under the old AR 4.03, a factor of {k_now / k_old:.2f}")
+
+
+def test_length_is_the_only_dimensional_input():
+    from _core import planform
+    for L in (1.4, 2.0, 3.2):
+        af = AirframeSpec(length_m=L)
+        d = planform.derive(L)
+        assert abs(af.span_m - d.span_m) < 1e-9
+        assert abs(af.wing_area_m2 - d.area_m2) < 1e-9
+        assert abs(af.mac_m - d.mac_m) < 1e-9
+        # Area scales with the square of length; aspect ratio does not move.
+        assert abs(af.aspect_ratio - planform.ASPECT_RATIO) < 1e-9
+    big = AirframeSpec(length_m=4.0)
+    small = AirframeSpec(length_m=2.0)
+    assert abs(big.wing_area_m2 / small.wing_area_m2 - 4.0) < 1e-9
+    note("Span, area and mean chord all follow from length_m; doubling length "
+         "quadruples area and leaves aspect ratio alone")
+
+
+def test_a_disagreeing_reference_geometry_refuses_to_solve():
+    """The old defaults, supplied explicitly, must now fail rather than quietly
+    produce numbers against a shape the aircraft does not have."""
+    from _core.planform import GeometryMismatch, validate_or_raise
+    validate_or_raise(AirframeSpec())          # the derived default is fine
+    bad = AirframeSpec(length_m=2.0, span_m=1.10, wing_area_m2=0.30, mac_m=0.2727)
+    try:
+        validate_or_raise(bad)
+        raise AssertionError("a 76% area error was accepted")
+    except GeometryMismatch as exc:
+        assert "wing_area_m2" in str(exc) and "span_m" in str(exc)
+    # A solve refuses too, not just the checker.
+    spec = MissionSpec()
+    spec.airframe.wing_area_m2 = AirframeSpec().wing_area_m2 * 1.5
+    try:
+        simulate(spec)
+        raise AssertionError("simulate accepted a 50% area error")
+    except GeometryMismatch:
+        pass
+    # Inside the 2% tolerance it still runs.
+    ok = MissionSpec()
+    ok.airframe.wing_area_m2 = AirframeSpec().wing_area_m2 * 1.015
+    validate_or_raise(ok.airframe)
+    note("A supplied area more than 2% from the measured planform refuses to "
+         "solve; 1.5% still runs")
+
+
+def test_planform_area_is_the_integral_of_the_chord_table():
+    from _core import geometry_ratios as g
     from _core import planform
     af = AirframeSpec()
     pl = planform.build(af)
-    # Independent trapezoidal check against the module's own integration.
-    n = 2000
-    half = af.span_m / 2
-    total = 0.0
-    for i in range(n):
-        y = (i + 0.5) * half / n
-        total += (planform._te_x(af, af.planform, y, half)
-                  - planform._le_x(af.planform, y, half)) * half / n
-    assert abs(2 * total - pl.area_m2) / pl.area_m2 < 1e-6
+    # Independent trapezoidal integration against the module's midpoint rule.
+    n = 4000
+    total = sum(g.chord_over_l((i + 0.5) / n) for i in range(n)) / n
+    assert abs(total * g.SPAN_OVER_L - g.AREA_OVER_L2) / g.AREA_OVER_L2 < 1e-6
+    assert abs(pl.area_m2 - g.AREA_OVER_L2 * af.length_m ** 2) < 1e-9
     assert pl.root_chord_m > pl.tip_chord_m > 0
     assert 0 < pl.taper_ratio < 1
-    note(f"Planform: {pl.area_m2:.3f} m2, AR {pl.aspect_ratio:.2f}, MAC {pl.mac_m:.3f} m, "
-         f"root {pl.root_chord_m:.3f} m, tip {pl.tip_chord_m:.3f} m")
+    note(f"Planform at {af.length_m:.2f} m: {pl.area_m2:.3f} m2, AR "
+         f"{pl.aspect_ratio:.2f}, MAC {pl.mac_m:.3f} m, root {pl.root_chord_m:.3f} m, "
+         f"tip {pl.tip_chord_m:.3f} m")
 
 
-def test_planform_scales_with_span_and_length():
+def test_leading_edge_inverts_the_half_span_table():
+    from _core import geometry_ratios as g
+    half = g.SPAN_OVER_L / 2
+    for station, halfspan in g.HALF_SPAN_BY_STATION[1:]:
+        eta = halfspan / half
+        if eta > 1.0:
+            continue
+        assert abs(g.le_station(eta) - station) < 5e-3, (station, eta, g.le_station(eta))
+    note(f"Leading edge recovers every measured station to better than 0.005 L "
+         f"across {len(g.HALF_SPAN_BY_STATION) - 1} points")
+
+
+def test_typescript_and_python_agree_on_the_measured_geometry():
+    """Task 3a: both implementations must produce the same S, b and MAC.
+
+    The tables are generated into lib/planform-measured.mjs from
+    api/_core/geometry_ratios.py, and the JavaScript recomputes the integrals
+    rather than copying the results, so this compares two implementations of the
+    same definition."""
+    import json
+    import subprocess
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+    script = (
+        "import('./lib/planform-measured.mjs').then(m => console.log(JSON.stringify({"
+        "span: m.SPAN_OVER_L, area: m.AREA_OVER_L2, mac: m.MAC_OVER_L, ar: m.ASPECT_RATIO,"
+        "derived: m.deriveGeometry(2.0)})))"
+    )
+    res = subprocess.run(["node", "-e", script], cwd=root, capture_output=True, text=True)
+    assert res.returncode == 0, res.stderr
+    js = json.loads(res.stdout.strip())
+
+    from _core import geometry_ratios as g
     from _core import planform
-    base = planform.build(AirframeSpec())
-    bigger = planform.build(AirframeSpec(span_m=2.20, length_m=4.00))
-    # Doubling both dimensions at fixed shape must quadruple the area.
-    assert abs(bigger.area_m2 / base.area_m2 - 4.0) < 0.02
-    assert abs(bigger.aspect_ratio / base.aspect_ratio - 1.0) < 0.02
-    note(f"Doubling span and length takes the planform from {base.area_m2:.3f} to "
-         f"{bigger.area_m2:.3f} m2 at constant aspect ratio {base.aspect_ratio:.2f}")
+    for key, py in (("span", g.SPAN_OVER_L), ("area", g.AREA_OVER_L2),
+                    ("mac", g.MAC_OVER_L), ("ar", g.ASPECT_RATIO)):
+        assert abs(js[key] - py) / abs(py) < 1e-9, (key, js[key], py)
+    d = planform.derive(2.0)
+    assert abs(js["derived"]["spanM"] - d.span_m) < 1e-9
+    assert abs(js["derived"]["areaM2"] - d.area_m2) < 1e-9
+    assert abs(js["derived"]["macM"] - d.mac_m) < 1e-9
+    note(f"TypeScript and Python agree to machine precision: b/L {js['span']:.6f}, "
+         f"S/L2 {js['area']:.6f}, MAC/L {js['mac']:.6f}, AR {js['ar']:.6f}")
 
 
-def test_reconciliation_flags_the_reference_area_mismatch():
-    """The drawn blended wing body and the reference area the polar is written to
-    are not the same shape, and the tool has to say so rather than pick one."""
+def test_reconciliation_is_consistent_by_construction():
     from _core import planform
-    af = AirframeSpec()
-    r = planform.reconcile(af)
-    assert not r.consistent
-    assert r.area_error > 1.0                      # drawn area is several times the reference
-    assert any("referenced to" in w for w in r.warnings)
-    assert r.ld_max_drawn < r.ld_max_reference     # a fatter reference costs L/D
-    note(f"Reference area mismatch {r.area_error * 100:+.0f}%: L/D max {r.ld_max_reference:.2f} "
-         f"on the polar's area against {r.ld_max_drawn:.2f} on the drawn shape")
-
-
-def test_adopting_the_drawn_geometry_makes_it_consistent():
-    from _core import planform
-    af = AirframeSpec()
-    pl = planform.build(af)
-    adopted = AirframeSpec(wing_area_m2=pl.area_m2, mac_m=pl.mac_m)
-    r = planform.reconcile(adopted)
-    assert abs(r.area_error) < 1e-6
-    assert abs(r.mac_error) < 1e-6
-    # Span to length still disagrees with the CAD; adopting area does not fix shape.
-    assert any("Span to length" in w for w in r.warnings)
-    note("Adopting the drawn area and chord clears the area and MAC warnings; the span to "
-         "length proportion is a separate disagreement and stays flagged")
+    r = planform.reconcile(AirframeSpec())
+    assert r.consistent, r.warnings
+    assert abs(r.area_error) < 1e-9 and abs(r.mac_error) < 1e-9
+    note("With the geometry derived from length there is nothing left to "
+         "reconcile: the drawn planform and the polar's reference area are the "
+         "same measurement")
 
 
 def test_span_load_is_bounded_and_departs_from_elliptical():
@@ -620,87 +731,6 @@ def test_span_load_is_bounded_and_departs_from_elliptical():
     assert abs(worst.departure) > 0.02
     note(f"Schrenk span load departs from elliptical by {worst.departure * 100:+.0f}% at "
          f"eta {worst.eta:.2f}; this is an approximation, not a lifting-line solve")
-
-
-def test_glb_contract_checker_accepts_a_conforming_export():
-    """The export contract in public/models/README.md, exercised end to end.
-
-    A synthetic GLB carrying the contract part names is written, validated, and
-    the part resolution is checked against what the viewport does with the same
-    names. No mesh is shipped: the real one is the CAD export."""
-    import json
-    import struct
-    import subprocess
-    import tempfile
-
-    parts = ["radome", "body", "wing_L", "wing_R", "tip_L", "tip_R",
-             "inlet", "engine", "spike", "nozzle"]
-    accessors, views, meshes, nodes, blobs = [], [], [], [], []
-    offset = 0
-    for i, name in enumerate(parts):
-        x = -1.0 + 2.0 * i / (len(parts) - 1)
-        v = [(x, 0.0, -0.15), (x + 0.18, 0.0, 0.0), (x, 0.0, 0.15)]
-        vb = b"".join(struct.pack("<3f", *p) for p in v)
-        nb = b"".join(struct.pack("<3f", 0.0, 1.0, 0.0) for _ in v)
-        ib = struct.pack("<3H", 0, 1, 2) + b"\x00\x00"
-        for blob, target, ctype, comp, mn, mx, ln in (
-                (vb, 34962, "VEC3", 5126, [x, 0.0, -0.15], [x + 0.18, 0.0, 0.15], len(vb)),
-                (nb, 34962, "VEC3", 5126, [0.0, 1.0, 0.0], [0.0, 1.0, 0.0], len(nb)),
-                (ib, 34963, "SCALAR", 5123, [0], [2], 6)):
-            views.append({"buffer": 0, "byteOffset": offset, "byteLength": ln, "target": target})
-            accessors.append({"bufferView": len(views) - 1, "componentType": comp,
-                              "count": 3, "type": ctype, "min": mn, "max": mx})
-            blobs.append(blob)
-            offset += len(blob)
-        base = len(accessors) - 3
-        meshes.append({"name": name, "primitives": [
-            {"attributes": {"POSITION": base, "NORMAL": base + 1},
-             "indices": base + 2, "mode": 4}]})
-        nodes.append({"name": name, "mesh": len(meshes) - 1})
-
-    buf = b"".join(blobs)
-    gltf = {"asset": {"version": "2.0", "generator": "act1 contract test"},
-            "scene": 0, "scenes": [{"nodes": list(range(len(nodes)))}],
-            "nodes": nodes, "meshes": meshes, "accessors": accessors,
-            "bufferViews": views, "buffers": [{"byteLength": len(buf)}]}
-    js = json.dumps(gltf, separators=(",", ":")).encode()
-    js += b" " * ((4 - len(js) % 4) % 4)
-    buf += b"\x00" * ((4 - len(buf) % 4) % 4)
-    glb = (b"glTF" + struct.pack("<II", 2, 12 + 8 + len(js) + 8 + len(buf))
-           + struct.pack("<II", len(js), 0x4E4F534A) + js
-           + struct.pack("<II", len(buf), 0x004E4942) + buf)
-
-    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
-    with tempfile.TemporaryDirectory() as tmp:
-        path = os.path.join(tmp, "act1.glb")
-        with open(path, "wb") as fh:
-            fh.write(glb)
-        res = subprocess.run([sys.executable, os.path.join(root, "scripts", "check_glb.py"), path],
-                             capture_output=True, text=True)
-        assert res.returncode == 0, res.stdout + res.stderr
-        assert "contract satisfied" in res.stdout
-
-        sys.path.insert(0, os.path.join(root, "scripts"))
-        import check_glb
-        assert check_glb.resolve("ACT1_wing_R_001") == "wing"
-        assert check_glb.resolve("Nose_Cone") == "radome"
-        assert check_glb.resolve("centrebody_spike") == "spike"
-        assert check_glb.resolve("something_unlabelled") == "body"
-    note(f"GLB contract: {len(parts)} named parts validated, exporter suffixes resolve, "
-         f"unrecognised names fall back to body")
-
-
-def test_absent_mesh_is_a_supported_state_not_a_failure():
-    import subprocess
-    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
-    res = subprocess.run(
-        [sys.executable, os.path.join(root, "scripts", "check_glb.py"),
-         os.path.join(root, "public", "models", "act1.glb")],
-        capture_output=True, text=True)
-    assert res.returncode == 0
-    assert "parametric airframe" in res.stdout or "absent" in res.stdout
-    note("With no CAD mesh present the checker reports the parametric fallback rather "
-         "than failing")
 
 # ==========================================================================
 

@@ -16,7 +16,15 @@
  * centred on its own length.
  */
 import * as THREE from "three";
+import { deriveGeometry } from "@/lib/planform-measured.mjs";
 import type { Planform, PlanformSpec } from "@/lib/types";
+
+/**
+ * Overall length is the only dimensional input; span, area and mean chord are
+ * measured ratios of it. Re-exported here so the viewport can show what it is
+ * assuming rather than implying the numbers came from CAD.
+ */
+export { deriveGeometry };
 
 export interface AirframePart {
   name: string;
@@ -252,7 +260,9 @@ export function buildAct1(pl: Planform, pf: PlanformSpec): AirframePart[] {
   parts.push({ name: "body", geometry: buildBody(pl, L) });
   parts.push({ name: "radome", geometry: buildRadome(pl, pf, L) });
 
-  // --- dorsal propulsion -------------------------------------------------
+  // --- dorsal propulsion, at the measured stations ------------------------
+  // Inlet x/L 0.28 to 0.45, engine casing 0.45 to 0.60, exhaust at the
+  // trailing-edge notch.
   const inletX = pf.inlet_start_frac * L;
   const inletLen = pf.inlet_length_frac * L;
   const rEng = pf.engine_radius_frac * L;
@@ -267,7 +277,7 @@ export function buildAct1(pl: Planform, pf: PlanformSpec): AirframePart[] {
   });
   parts.push({
     name: "engine",
-    geometry: tube(L, inletX + inletLen, L - pf.te_notch_depth_frac * L, rEng, rEng * 0.86, yTop, 1.0),
+    geometry: tube(L, pf.engine_start_frac * L, pf.engine_end_frac * L, rEng, rEng * 0.9, yTop, 1.0),
   });
   // Centrebody spike: a long cone pointing forward out of the inlet lip.
   parts.push({
@@ -275,10 +285,12 @@ export function buildAct1(pl: Planform, pf: PlanformSpec): AirframePart[] {
     accent: true,
     geometry: tube(L, inletX - inletLen * 0.85, inletX + inletLen * 0.2, 0.001, rEng * 0.52, yTop, 1.0, 14, false),
   });
-  // Exhaust nozzle in the trailing-edge notch.
+  // Exhaust nozzle running from the casing back to the trailing-edge notch,
+  // which the measured chord table puts at the root chord, x/L 0.827.
+  const notchX = pl.stations[0].te_x_m;
   parts.push({
     name: "nozzle",
-    geometry: tube(L, L - pf.te_notch_depth_frac * L, L, rEng * 0.86, rEng * 0.95, yTop, 1.0),
+    geometry: tube(L, pf.engine_end_frac * L, notchX, rEng * 0.9, rEng * 0.95, yTop, 1.0),
   });
 
   // --- outboard control surfaces on the trailing edge --------------------

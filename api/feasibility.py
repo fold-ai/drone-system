@@ -24,6 +24,7 @@ from _core.launch import feasibility, rail_length_trade, run_rail, solve_booster
 from _core.mission import resolve_profile, size_mission                  # noqa: E402
 from _core.performance import mach1_deficit, mach_sweep                  # noqa: E402
 from _core.planform import build as build_planform, reconcile             # noqa: E402
+from _core.planform import validate_or_raise                              # noqa: E402
 from _core.schema import MissionSpec, from_dict, to_dict                 # noqa: E402
 
 
@@ -33,6 +34,7 @@ def _run(handler: BaseHTTPRequestHandler, body: dict) -> None:
     h_exit = (spec.atmosphere.ground_altitude_m
               + spec.launch.rail_length_m * math.sin(math.radians(spec.launch.rail_angle_deg)))
 
+    validate_or_raise(spec.airframe)
     budget, plan = size_mission(spec, h_exit)
     resolved = resolve_profile(spec, plan)
     fuel = budget.fuel_loaded_kg

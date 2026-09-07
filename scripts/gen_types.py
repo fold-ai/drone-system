@@ -30,8 +30,10 @@ from _core import planform as planform_mod       # noqa: E402
 from _core import study as study_mod             # noqa: E402
 from _core import schema as schema_mod            # noqa: E402
 from _core.dynamics import COLUMNS                # noqa: E402
+from _core import geometry_ratios as ratios_mod  # noqa: E402
 
 OUT = os.path.join(ROOT, "lib", "types.ts")
+OUT_PLANFORM = os.path.join(ROOT, "lib", "planform-measured.mjs")
 
 EMIT = [
     (schema_mod, ["ScheduleNode", "PlanformSpec", "AirframeSpec", "AtmosphereSpec", "BoosterSpec",
@@ -330,22 +332,153 @@ def build() -> str:
     return "\n".join(parts)
 
 
+def build_planform_module() -> str:
+    """The measured tables, for the viewport.
+
+    Generated rather than hand-copied so there is exactly one definition of the
+    shape. The module recomputes the integrals in JavaScript and carries the
+    Python results beside them, so the two implementations can be compared
+    rather than assumed to agree.
+    """
+    half = ",\n  ".join(f"[{x}, {y}]" for x, y in ratios_mod.HALF_SPAN_BY_STATION)
+    chord = ",\n  ".join(f"[{x}, {y}]" for x, y in ratios_mod.CHORD_BY_ETA)
+    return f"""// GENERATED FILE - DO NOT EDIT.
+// Written by scripts/gen_types.py from api/_core/geometry_ratios.py.
+//
+// The ACT-1 planform, measured from the plan-view CAD render. Nose at x/L = 0,
+// every value a ratio of overall length: the render carries no dimensions, so
+// the absolute scale is unknown and overall length is the one dimensional input.
+//
+// The integrals below are recomputed here in JavaScript rather than copied, and
+// PYTHON carries what api/_core produced from the same tables. Two
+// implementations that agree by construction are worth more than one that is
+// trusted, and tests/test_physics.py asserts they do.
+
+/** Half-span against station. Monotonic, so it inverts to give the leading edge. */
+export const HALF_SPAN_BY_STATION = [
+  {half},
+];
+
+/** Chord against span fraction. The render's outermost measurement is at 0.96. */
+export const CHORD_BY_ETA = [
+  {chord},
+];
+
+export const SWEEP_FOREBODY_DEG = {ratios_mod.SWEEP_FOREBODY_DEG};
+export const SWEEP_INNER_DEG = {ratios_mod.SWEEP_INNER_DEG};
+export const SWEEP_TIP_DEG = {ratios_mod.SWEEP_TIP_DEG};
+export const CRANK_STATION = {ratios_mod.CRANK_STATION};
+export const RADOME_STATION = {ratios_mod.RADOME_STATION};
+export const INLET_START = {ratios_mod.INLET_START};
+export const INLET_END = {ratios_mod.INLET_END};
+export const ENGINE_START = {ratios_mod.ENGINE_START};
+export const ENGINE_END = {ratios_mod.ENGINE_END};
+
+/** Piecewise-linear with linear extrapolation off the ends. */
+function interp(table, x) {{
+  if (x <= table[0][0]) {{
+    if (table.length < 2 || x === table[0][0]) return table[0][1];
+    const [x0, y0] = table[0];
+    const [x1, y1] = table[1];
+    return y0 + ((y1 - y0) * (x - x0)) / (x1 - x0);
+  }}
+  for (let i = 1; i < table.length; i += 1) {{
+    const [x0, y0] = table[i - 1];
+    const [x1, y1] = table[i];
+    if (x <= x1) return y0 + ((y1 - y0) * (x - x0)) / (x1 - x0);
+  }}
+  const [x0, y0] = table[table.length - 2];
+  const [x1, y1] = table[table.length - 1];
+  return y1 + ((y1 - y0) * (x - x1)) / (x1 - x0);
+}}
+
+/** Chord at span fraction eta, as a fraction of overall length. */
+export function chordOverL(eta) {{
+  return Math.max(0, interp(CHORD_BY_ETA, Math.min(1, Math.max(0, eta))));
+}}
+
+/** Leading-edge station at span fraction eta, inverting the half-span table. */
+export function leStation(eta) {{
+  const target = eta * (SPAN_OVER_L / 2);
+  const t = HALF_SPAN_BY_STATION;
+  if (target <= t[0][1]) return t[0][0];
+  for (let i = 1; i < t.length; i += 1) {{
+    const [x0, h0] = t[i - 1];
+    const [x1, h1] = t[i];
+    if (target <= h1) {{
+      if (h1 - h0 < 1e-12) return x1;
+      return x0 + ((x1 - x0) * (target - h0)) / (h1 - h0);
+    }}
+  }}
+  return t[t.length - 1][0];
+}}
+
+/** Midpoint rule over eta from 0 to 1. The same rule api/_core uses. */
+function integrate(f, n = {2000}) {{
+  let total = 0;
+  const step = 1 / n;
+  for (let i = 0; i < n; i += 1) total += f((i + 0.5) * step);
+  return total * step;
+}}
+
+export const SPAN_OVER_L = 2 * Math.max(...HALF_SPAN_BY_STATION.map((r) => r[1]));
+export const CHORD_INTEGRAL = integrate(chordOverL);
+export const CHORD_SQ_INTEGRAL = integrate((e) => chordOverL(e) ** 2);
+export const AREA_OVER_L2 = SPAN_OVER_L * CHORD_INTEGRAL;
+export const MAC_OVER_L = (SPAN_OVER_L / AREA_OVER_L2) * CHORD_SQ_INTEGRAL;
+export const ASPECT_RATIO = (SPAN_OVER_L * SPAN_OVER_L) / AREA_OVER_L2;
+
+/** What api/_core computed from the same tables, for the cross-check. */
+export const PYTHON = {{
+  SPAN_OVER_L: {ratios_mod.SPAN_OVER_L!r},
+  AREA_OVER_L2: {ratios_mod.AREA_OVER_L2!r},
+  MAC_OVER_L: {ratios_mod.MAC_OVER_L!r},
+  ASPECT_RATIO: {ratios_mod.ASPECT_RATIO!r},
+}};
+
+/**
+ * Overall length is the only dimensional input. Everything else is a measured
+ * ratio of it, and none of it came from CAD dimensions.
+ */
+export function deriveGeometry(lengthM) {{
+  const l = Math.max(1e-6, lengthM);
+  return {{
+    lengthM: l,
+    spanM: SPAN_OVER_L * l,
+    areaM2: AREA_OVER_L2 * l * l,
+    macM: MAC_OVER_L * l,
+    aspectRatio: ASPECT_RATIO,
+  }};
+}}
+"""
+
+
 def main() -> int:
     text = build()
+    planform_text = build_planform_module()
     check = "--check" in sys.argv
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
-    existing = open(OUT, encoding="utf-8").read() if os.path.exists(OUT) else None
+    outputs = [(OUT, text), (OUT_PLANFORM, planform_text)]
     if check:
-        if existing != text:
-            print("lib/types.ts is out of date. Run: python scripts/gen_types.py")
+        stale = [
+            path for path, want in outputs
+            if (open(path, encoding="utf-8").read() if os.path.exists(path) else None) != want
+        ]
+        if stale:
+            names = ", ".join(os.path.relpath(p, ROOT) for p in stale)
+            print(f"{names} out of date. Run: python scripts/gen_types.py")
             return 1
-        print("lib/types.ts is up to date.")
+        print("lib/types.ts and lib/planform-measured.mjs are up to date.")
         return 0
-    with open(OUT, "w", encoding="utf-8") as fh:
-        fh.write(text)
+    for path, want in outputs:
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(want)
     n = text.count("export interface")
     print(f"wrote {os.path.relpath(OUT, ROOT)}  ({len(text) / 1024:.1f} KB, "
           f"{n} interfaces, {len(COLUMNS)} trajectory columns)")
+    print(f"wrote {os.path.relpath(OUT_PLANFORM, ROOT)}  "
+          f"(b/L {ratios_mod.SPAN_OVER_L:.4f}, S/L2 {ratios_mod.AREA_OVER_L2:.4f}, "
+          f"MAC/L {ratios_mod.MAC_OVER_L:.4f}, AR {ratios_mod.ASPECT_RATIO:.4f})")
     return 0
 
 

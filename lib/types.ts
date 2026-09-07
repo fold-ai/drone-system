@@ -14,13 +14,15 @@ export interface ScheduleNode {
 
 /** Cranked-delta blended wing body, from the ACT-1 plan-view CAD. */
 export interface PlanformSpec {
-  /** inboard leading-edge sweep [deg] */
+  /** inner wing leading-edge sweep, measured [deg] */
   sweep_inboard_deg: number;
-  /** outer panel sweep, aft of the crank [deg] */
+  /** tip panel sweep, measured [deg] */
   sweep_outer_deg: number;
-  /** crank station as a fraction of semispan */
+  /** forebody chine, measured [deg] */
+  sweep_forebody_deg: number;
+  /** crank station, x/L, measured */
   crank_frac: number;
-  /** ogive radome length as a fraction of overall */
+  /** ogive radome runs to x/L 0.24, measured */
   radome_frac: number;
   /** centre body half-width, fraction of semispan */
   body_halfwidth_frac: number;
@@ -38,9 +40,13 @@ export interface PlanformSpec {
   twist_root_deg: number;
   /** washout; geometry only, not fed to the polar [deg] */
   twist_tip_deg: number;
-  /** dorsal inlet lip, fraction of length */
+  /** dorsal inlet lip, x/L, measured */
   inlet_start_frac: number;
+  /** inlet runs to x/L 0.45, measured */
   inlet_length_frac: number;
+  /** engine casing, x/L 0.45 to 0.60, measured */
+  engine_start_frac: number;
+  engine_end_frac: number;
   /** engine casing radius as a fraction of length */
   engine_radius_frac: number;
   /** blade surface height, fraction of semispan */
@@ -51,14 +57,14 @@ export interface PlanformSpec {
 
 /** Carbon-composite blended-delta UAV. All lengths measured aft from the nose datum. */
 export interface AirframeSpec {
-  /** S [m2] */
-  wing_area_m2: number;
-  /** b  -> AR = b^2/S = 4.033 [m] */
-  span_m: number;
-  /** mean aerodynamic chord, S/b for the reference planform [m] */
-  mac_m: number;
-  /** overall length, used by the 3D placeholder [m] */
+  /** ASSUMED. The render is dimensionless. [m] */
   length_m: number;
+  /** S, derived: 0.368 L^2 [m2] */
+  wing_area_m2: number;
+  /** b, derived: 0.722 L [m] */
+  span_m: number;
+  /** mean aerodynamic chord, derived: 0.591 L [m] */
+  mac_m: number;
   /** subsonic zero-lift drag coefficient */
   cd0_sub: number;
   /** drag-divergence Mach number [M] */
@@ -110,14 +116,14 @@ export interface AtmosphereSpec {
   ground_altitude_m: number;
 }
 
-/** BoosterSpec(enabled: 'bool' = True, thrust_n: 'float' = 2500.0, burn_time_s: 'float' = 0.19, mass_kg: 'float' = 0.4, jettison: 'bool' = True, x_booster_m: 'float' = 1.1) */
+/** BoosterSpec(enabled: 'bool' = True, thrust_n: 'float' = 600.0, burn_time_s: 'float' = 0.4, mass_kg: 'float' = 0.25, jettison: 'bool' = True, x_booster_m: 'float' = 1.1) */
 export interface BoosterSpec {
   enabled: boolean;
-  /** sized by solve_booster() for a 3 m rail at 13.5 kg gross [N] */
+  /** sized by solve_booster() for a 3 m rail on the [N] */
   thrust_n: number;
-  /** 475 N s total impulse [s] */
+  /** measured planform: 234 N s total impulse. The [s] */
   burn_time_s: number;
-  /** motor + case; ~0.22 kg propellant at Isp 200 s [kg] */
+  /** measured wing is five times the old reference area, so stall speed fell from 30 to 13 m/s and the motor needed shrank with it. [kg] */
   mass_kg: number;
   jettison: boolean;
   /** station of the booster mass, kept near the CG so the motor does not destabilise the aircraft during the rail run [m] */
@@ -560,7 +566,6 @@ export interface Derived {
 export interface SpanStation {
   /**  [m] */
   y_m: number;
-  /** y / (b/2) */
   eta: number;
   /**  [m] */
   le_x_m: number;
@@ -571,20 +576,18 @@ export interface SpanStation {
   thickness_frac: number;
   /**  [deg] */
   twist_deg: number;
-  /** local lift per unit span, normalised to mean */
   schrenk_load: number;
   elliptic_load: number;
-  /** schrenk - elliptic, as a fraction of elliptic */
   departure: number;
 }
 
-/** Planform(span_m: 'float', length_m: 'float', area_m2: 'float', mac_m: 'float', aspect_ratio: 'float', root_chord_m: 'float', tip_chord_m: 'float', crank_y_m: 'float', crank_x_m: 'float', tip_le_x_m: 'float', taper_ratio: 'float', outline: 'List[Tuple[float, float]]' = <factory>, stations: 'List[SpanStation]' = <factory>) */
+/** Planform(span_m: 'float', length_m: 'float', area_m2: 'float', mac_m: 'float', aspect_ratio: 'float', root_chord_m: 'float', tip_chord_m: 'float', crank_y_m: 'float', crank_x_m: 'float', tip_le_x_m: 'float', taper_ratio: 'float', span_over_l: 'float', area_over_l2: 'float', mac_over_l: 'float', measured: 'bool' = True, outline: 'List[Tuple[float, float]]' = <factory>, stations: 'List[SpanStation]' = <factory>) */
 export interface Planform {
   /**  [m] */
   span_m: number;
   /**  [m] */
   length_m: number;
-  /** full planform area enclosed by the drawn outline [m2] */
+  /**  [m2] */
   area_m2: number;
   /**  [m] */
   mac_m: number;
@@ -600,18 +603,20 @@ export interface Planform {
   /**  [m] */
   tip_le_x_m: number;
   taper_ratio: number;
-  /** half planform, x aft, y out */
+  span_over_l: number;
+  area_over_l2: number;
+  mac_over_l: number;
+  measured: boolean;
   outline: number[][];
   stations: SpanStation[];
 }
 
-/** How far the drawn shape is from the numbers the drag polar is written to. */
+/** Reconciliation(drawn_area_m2: 'float', reference_area_m2: 'float', area_error: 'float', drawn_aspect_ratio: 'float', reference_aspect_ratio: 'float', drawn_mac_m: 'float', reference_mac_m: 'float', mac_error: 'float', span_length_ratio: 'float', cad_span_length_ratio: 'float', span_length_error: 'float', tolerance: 'float', consistent: 'bool', ld_max_reference: 'float', ld_max_drawn: 'float', warnings: 'List[str]' = <factory>) */
 export interface Reconciliation {
   /**  [m2] */
   drawn_area_m2: number;
   /**  [m2] */
   reference_area_m2: number;
-  /** signed fraction, (drawn - reference) / reference */
   area_error: number;
   drawn_aspect_ratio: number;
   reference_aspect_ratio: number;
@@ -939,10 +944,10 @@ export interface RailTradePoint {
 /** Every default, straight from the Python dataclasses. */
 export const DEFAULT_MISSION_SPEC: MissionSpec = {
   "airframe": {
-    "wing_area_m2": 0.3,
-    "span_m": 1.1,
-    "mac_m": 0.2727,
     "length_m": 2.0,
+    "wing_area_m2": 1.471075,
+    "span_m": 1.444,
+    "mac_m": 1.182848560735352,
     "cd0_sub": 0.024,
     "mach_dd": 0.82,
     "dcd_wave": 0.045,
@@ -962,10 +967,11 @@ export const DEFAULT_MISSION_SPEC: MissionSpec = {
     "x_np_m": 0.96,
     "static_margin_min": 0.03,
     "planform": {
-      "sweep_inboard_deg": 67.0,
-      "sweep_outer_deg": 40.0,
-      "crank_frac": 0.58,
-      "radome_frac": 0.3,
+      "sweep_inboard_deg": 59.0,
+      "sweep_outer_deg": 84.8,
+      "sweep_forebody_deg": 77.4,
+      "crank_frac": 0.78,
+      "radome_frac": 0.24,
       "body_halfwidth_frac": 0.24,
       "te_notch_halfwidth_frac": 0.1,
       "te_notch_depth_frac": 0.09,
@@ -974,8 +980,10 @@ export const DEFAULT_MISSION_SPEC: MissionSpec = {
       "thickness_tip_frac": 0.07,
       "twist_root_deg": 0.0,
       "twist_tip_deg": -2.0,
-      "inlet_start_frac": 0.42,
-      "inlet_length_frac": 0.16,
+      "inlet_start_frac": 0.28,
+      "inlet_length_frac": 0.17,
+      "engine_start_frac": 0.45,
+      "engine_end_frac": 0.6,
       "engine_radius_frac": 0.055,
       "fin_span_frac": 0.1,
       "fin_station_frac": 0.62
@@ -1007,9 +1015,9 @@ export const DEFAULT_MISSION_SPEC: MissionSpec = {
     "engine_prespooled": true,
     "booster": {
       "enabled": true,
-      "thrust_n": 2500.0,
-      "burn_time_s": 0.19,
-      "mass_kg": 0.4,
+      "thrust_n": 600.0,
+      "burn_time_s": 0.4,
+      "mass_kg": 0.25,
       "jettison": true,
       "x_booster_m": 1.1
     }
@@ -1063,13 +1071,24 @@ export interface FieldMeta {
   * where the number came from. Drives the Model parameters drawer. */
 export const FIELD_META: Record<string, FieldMeta> = 
 {
+  "airframe.length_m": {
+    "path": "airframe.length_m",
+    "label": "length m",
+    "unit": "m",
+    "type": "number",
+    "default": 2.0,
+    "doc": "ASSUMED. The render is dimensionless.",
+    "min": 1.0,
+    "max": 4.0,
+    "step": 0.01
+  },
   "airframe.wing_area_m2": {
     "path": "airframe.wing_area_m2",
     "label": "wing area m2",
     "unit": "m2",
     "type": "number",
-    "default": 0.3,
-    "doc": "S",
+    "default": 1.471075,
+    "doc": "S, derived: 0.368 L^2",
     "min": 0.1,
     "max": 0.6,
     "step": 0.005
@@ -1079,8 +1098,8 @@ export const FIELD_META: Record<string, FieldMeta> =
     "label": "span m",
     "unit": "m",
     "type": "number",
-    "default": 1.1,
-    "doc": "b  -> AR = b^2/S = 4.033",
+    "default": 1.444,
+    "doc": "b, derived: 0.722 L",
     "min": 0.6,
     "max": 2.2,
     "step": 0.01
@@ -1090,22 +1109,11 @@ export const FIELD_META: Record<string, FieldMeta> =
     "label": "mac m",
     "unit": "m",
     "type": "number",
-    "default": 0.2727,
-    "doc": "mean aerodynamic chord, S/b for the reference planform",
+    "default": 1.182848560735352,
+    "doc": "mean aerodynamic chord, derived: 0.591 L",
     "min": 0.1,
     "max": 0.6,
     "step": 0.001
-  },
-  "airframe.length_m": {
-    "path": "airframe.length_m",
-    "label": "length m",
-    "unit": "m",
-    "type": "number",
-    "default": 2.0,
-    "doc": "overall length, used by the 3D placeholder",
-    "min": 1.0,
-    "max": 4.0,
-    "step": 0.01
   },
   "airframe.cd0_sub": {
     "path": "airframe.cd0_sub",
@@ -1316,8 +1324,8 @@ export const FIELD_META: Record<string, FieldMeta> =
     "label": "sweep inboard deg",
     "unit": "deg",
     "type": "number",
-    "default": 67.0,
-    "doc": "inboard leading-edge sweep",
+    "default": 59.0,
+    "doc": "inner wing leading-edge sweep, measured",
     "min": 35.0,
     "max": 80.0,
     "step": 0.5
@@ -1327,19 +1335,27 @@ export const FIELD_META: Record<string, FieldMeta> =
     "label": "sweep outer deg",
     "unit": "deg",
     "type": "number",
-    "default": 40.0,
-    "doc": "outer panel sweep, aft of the crank",
+    "default": 84.8,
+    "doc": "tip panel sweep, measured",
     "min": 10.0,
     "max": 70.0,
     "step": 0.5
+  },
+  "airframe.planform.sweep_forebody_deg": {
+    "path": "airframe.planform.sweep_forebody_deg",
+    "label": "sweep forebody deg",
+    "unit": "deg",
+    "type": "number",
+    "default": 77.4,
+    "doc": "forebody chine, measured"
   },
   "airframe.planform.crank_frac": {
     "path": "airframe.planform.crank_frac",
     "label": "crank frac",
     "unit": "",
     "type": "number",
-    "default": 0.58,
-    "doc": "crank station as a fraction of semispan",
+    "default": 0.78,
+    "doc": "crank station, x/L, measured",
     "min": 0.2,
     "max": 0.95,
     "step": 0.01
@@ -1349,8 +1365,8 @@ export const FIELD_META: Record<string, FieldMeta> =
     "label": "radome frac",
     "unit": "",
     "type": "number",
-    "default": 0.3,
-    "doc": "ogive radome length as a fraction of overall",
+    "default": 0.24,
+    "doc": "ogive radome runs to x/L 0.24, measured",
     "min": 0.1,
     "max": 0.5,
     "step": 0.01
@@ -1447,8 +1463,8 @@ export const FIELD_META: Record<string, FieldMeta> =
     "label": "inlet start frac",
     "unit": "",
     "type": "number",
-    "default": 0.42,
-    "doc": "dorsal inlet lip, fraction of length",
+    "default": 0.28,
+    "doc": "dorsal inlet lip, x/L, measured",
     "min": 0.2,
     "max": 0.8,
     "step": 0.01
@@ -1458,10 +1474,26 @@ export const FIELD_META: Record<string, FieldMeta> =
     "label": "inlet length frac",
     "unit": "",
     "type": "number",
-    "default": 0.16,
+    "default": 0.17,
+    "doc": "inlet runs to x/L 0.45, measured",
     "min": 0.05,
     "max": 0.4,
     "step": 0.01
+  },
+  "airframe.planform.engine_start_frac": {
+    "path": "airframe.planform.engine_start_frac",
+    "label": "engine start frac",
+    "unit": "",
+    "type": "number",
+    "default": 0.45,
+    "doc": "engine casing, x/L 0.45 to 0.60, measured"
+  },
+  "airframe.planform.engine_end_frac": {
+    "path": "airframe.planform.engine_end_frac",
+    "label": "engine end frac",
+    "unit": "",
+    "type": "number",
+    "default": 0.6
   },
   "airframe.planform.engine_radius_frac": {
     "path": "airframe.planform.engine_radius_frac",
@@ -1700,8 +1732,8 @@ export const FIELD_META: Record<string, FieldMeta> =
     "label": "thrust n",
     "unit": "N",
     "type": "number",
-    "default": 2500.0,
-    "doc": "sized by solve_booster() for a 3 m rail at 13.5 kg gross",
+    "default": 600.0,
+    "doc": "sized by solve_booster() for a 3 m rail on the",
     "min": 0.0,
     "max": 8000.0,
     "step": 25.0
@@ -1711,8 +1743,8 @@ export const FIELD_META: Record<string, FieldMeta> =
     "label": "burn time s",
     "unit": "s",
     "type": "number",
-    "default": 0.19,
-    "doc": "475 N s total impulse",
+    "default": 0.4,
+    "doc": "measured planform: 234 N s total impulse. The",
     "min": 0.02,
     "max": 2.0,
     "step": 0.01
@@ -1722,8 +1754,8 @@ export const FIELD_META: Record<string, FieldMeta> =
     "label": "mass kg",
     "unit": "kg",
     "type": "number",
-    "default": 0.4,
-    "doc": "motor + case; ~0.22 kg propellant at Isp 200 s",
+    "default": 0.25,
+    "doc": "measured wing is five times the old reference area, so stall speed fell from 30 to 13 m/s and the motor needed shrank with it.",
     "min": 0.0,
     "max": 2.0,
     "step": 0.01

@@ -11,6 +11,7 @@ from dataclasses import dataclass, field, fields, is_dataclass
 from typing import Any, Dict, List, Optional, get_args, get_origin, get_type_hints
 
 from .constants import G0
+from .geometry_ratios import AREA_OVER_L2, MAC_OVER_L, SPAN_OVER_L
 
 
 # --------------------------------------------------------------------------
@@ -37,10 +38,11 @@ class PlanformSpec:
     AirframeSpec.wing_area_m2, and planform.reconcile() reports when the two
     disagree rather than quietly reconciling them.
     """
-    sweep_inboard_deg: float = 67.0   # inboard leading-edge sweep
-    sweep_outer_deg: float = 40.0     # outer panel sweep, aft of the crank
-    crank_frac: float = 0.58          # crank station as a fraction of semispan
-    radome_frac: float = 0.30         # ogive radome length as a fraction of overall
+    sweep_inboard_deg: float = 59.0   # inner wing leading-edge sweep, measured
+    sweep_outer_deg: float = 84.8     # tip panel sweep, measured
+    sweep_forebody_deg: float = 77.4  # forebody chine, measured
+    crank_frac: float = 0.78          # crank station, x/L, measured
+    radome_frac: float = 0.24         # ogive radome runs to x/L 0.24, measured
     body_halfwidth_frac: float = 0.24 # centre body half-width, fraction of semispan
     te_notch_halfwidth_frac: float = 0.10  # exhaust notch half-width, fraction of semispan
     te_notch_depth_frac: float = 0.09      # notch depth, fraction of overall length
@@ -49,8 +51,10 @@ class PlanformSpec:
     thickness_tip_frac: float = 0.070      # t/c at the tip
     twist_root_deg: float = 0.0
     twist_tip_deg: float = -2.0       # washout; geometry only, not fed to the polar
-    inlet_start_frac: float = 0.42    # dorsal inlet lip, fraction of length
-    inlet_length_frac: float = 0.16
+    inlet_start_frac: float = 0.28    # dorsal inlet lip, x/L, measured
+    inlet_length_frac: float = 0.17   # inlet runs to x/L 0.45, measured
+    engine_start_frac: float = 0.45   # engine casing, x/L 0.45 to 0.60, measured
+    engine_end_frac: float = 0.60
     engine_radius_frac: float = 0.055 # engine casing radius as a fraction of length
     fin_span_frac: float = 0.10       # blade surface height, fraction of semispan
     fin_station_frac: float = 0.62    # blade station, fraction of semispan
@@ -59,11 +63,17 @@ class PlanformSpec:
 @dataclass
 class AirframeSpec:
     """Carbon-composite blended-delta UAV. All lengths measured aft from the nose datum."""
-    # planform
-    wing_area_m2: float = 0.30       # S
-    span_m: float = 1.10             # b  -> AR = b^2/S = 4.033
-    mac_m: float = 0.2727            # mean aerodynamic chord, S/b for the reference planform
-    length_m: float = 2.00           # overall length, used by the 3D placeholder
+    # --- geometry -------------------------------------------------------
+    # Overall length is the only dimensional input. The render carries no
+    # dimensions, so span, area and mean chord are measured ratios of it and are
+    # filled in below when left at zero. Supplying them explicitly is allowed,
+    # but the solver checks them against the drawn planform and refuses to run
+    # on a disagreement: a wrong reference area puts the induced-drag factor
+    # wrong and every range figure downstream with it.
+    length_m: float = 2.00           # ASSUMED. The render is dimensionless.
+    wing_area_m2: float = 0.0        # S, derived: 0.368 L^2
+    span_m: float = 0.0              # b, derived: 0.722 L
+    mac_m: float = 0.0               # mean aerodynamic chord, derived: 0.591 L
 
     # drag polar
     cd0_sub: float = 0.024           # subsonic zero-lift drag coefficient
@@ -91,6 +101,21 @@ class AirframeSpec:
 
     planform: PlanformSpec = field(default_factory=PlanformSpec)
     planform_area_tolerance: float = 0.02   # warn above 2% disagreement
+
+    def __post_init__(self) -> None:
+        """Fill the derived dimensions when they were left at zero.
+
+        A caller that sets them explicitly keeps what it set; the solver checks
+        those against the measured planform separately rather than quietly
+        overwriting them, so a disagreement surfaces as an error rather than as
+        a silently different aircraft.
+        """
+        if self.wing_area_m2 <= 0.0:
+            self.wing_area_m2 = AREA_OVER_L2 * self.length_m * self.length_m
+        if self.span_m <= 0.0:
+            self.span_m = SPAN_OVER_L * self.length_m
+        if self.mac_m <= 0.0:
+            self.mac_m = MAC_OVER_L * self.length_m
 
     @property
     def aspect_ratio(self) -> float:
@@ -152,9 +177,11 @@ class AtmosphereSpec:
 @dataclass
 class BoosterSpec:
     enabled: bool = True
-    thrust_n: float = 2500.0        # sized by solve_booster() for a 3 m rail at 13.5 kg gross
-    burn_time_s: float = 0.19       # 475 N s total impulse
-    mass_kg: float = 0.40           # motor + case; ~0.22 kg propellant at Isp 200 s
+    thrust_n: float = 600.0         # sized by solve_booster() for a 3 m rail on the
+    burn_time_s: float = 0.40       # measured planform: 234 N s total impulse. The
+    mass_kg: float = 0.25           # measured wing is five times the old reference
+                                    # area, so stall speed fell from 30 to 13 m/s
+                                    # and the motor needed shrank with it.
     jettison: bool = True
     x_booster_m: float = 1.10       # station of the booster mass, kept near the CG
                                     # so the motor does not destabilise the aircraft
