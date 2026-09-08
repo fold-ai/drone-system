@@ -1,0 +1,120 @@
+/* The deck route. Same two colours as the site, laid out one slide per screen. */
+
+.deck{
+  height:100svh;
+  overflow-y:auto;
+  scroll-snap-type:y mandatory;
+  scroll-behavior:smooth;
+}
+@media (prefers-reduced-motion:reduce){ .deck{scroll-behavior:auto;} }
+/* On a phone a slide is often taller than the screen, and mandatory snapping
+   fights the reader. Below 820px it reads as an ordinary scrolling page. */
+@media (max-width:820px){ .deck{scroll-snap-type:none;} }
+
+.deck-bar{
+  position:fixed; inset:0 0 auto 0; z-index:20;
+  height:56px; display:flex; align-items:center; justify-content:space-between;
+  padding:0 clamp(1.1rem,4vw,3.2rem);
+  background:linear-gradient(to bottom, rgba(0,0,0,.94) 45%, rgba(0,0,0,0));
+  pointer-events:none;
+}
+.deck-bar a{pointer-events:auto;}
+.deck-home img{display:block; width:auto; height:19px;}
+.deck-count{font-size:.76rem; letter-spacing:.14em; color:#5a5a5a; font-variant-numeric:tabular-nums;}
+
+.slide{
+  min-height:100svh; scroll-snap-align:start;
+  display:flex; flex-direction:column; justify-content:center;
+  gap:clamp(1rem,2.4vh,1.9rem);
+  padding:clamp(4.5rem,10vh,6rem) clamp(1.25rem,5vw,5.5rem) clamp(2.5rem,7vh,4rem);
+}
+.slide h2{
+  font-size:clamp(1.6rem,3.4vw,2.9rem); line-height:1.08; letter-spacing:-.02em; margin:0;
+}
+.slide h3{font-size:clamp(1rem,1.3vw,1.15rem); margin:0 0 .4rem; font-weight:400;}
+.slide p{margin:0; color:#c9c9c9;}
+.lede{font-size:clamp(1rem,1.25vw,1.16rem); max-width:60ch; color:#e0e0e0;}
+.fine{font-size:.85rem; color:var(--signal); max-width:70ch;}
+.tag{font-size:.74rem; letter-spacing:.22em; color:var(--signal);}
+
+/* title and closing */
+.s-title, .s-end{flex-direction:row; align-items:center; gap:clamp(2rem,6vw,5rem); justify-content:space-between;}
+.deck-lockup{display:block; width:auto; height:clamp(46px,6vw,74px); margin-bottom:clamp(1.4rem,4vh,2.4rem);}
+.s-title h1{
+  font-size:clamp(1.7rem,3.5vw,3rem); line-height:1.1; letter-spacing:-.022em;
+  margin:0 0 1.2rem; max-width:16ch; font-weight:400;
+}
+.kicker{font-size:.82rem; letter-spacing:.16em; color:var(--signal);}
+.kicker.big{font-size:clamp(1rem,1.5vw,1.3rem); letter-spacing:0; color:var(--signal); margin-bottom:1.6rem;}
+.s-title-art{flex:0 0 auto; width:clamp(140px,22vw,300px); opacity:.75;}
+@media (max-width:820px){
+  .s-title, .s-end{flex-direction:column; align-items:flex-start; justify-content:center;}
+  .s-title-art{width:min(46vw,190px); align-self:center;}
+}
+
+/* drawings */
+.dwg{width:100%; height:auto; display:block; overflow:visible;}
+.dw{fill:none; stroke:var(--bone); stroke-width:1.15; vector-effect:non-scaling-stroke; stroke-linejoin:round;}
+.dw.thin{stroke-width:.85; opacity:.5;}
+.dw.axis{stroke-width:.7; opacity:.32; stroke-dasharray:9 5 2 5;}
+.sheet{border:1px solid var(--line); padding:clamp(.9rem,2vw,1.6rem); margin:0;}
+.sheet figcaption{
+  margin-top:.9rem; padding-top:.7rem; border-top:1px solid var(--line);
+  font-size:.74rem; letter-spacing:.1em; color:var(--signal);
+  display:flex; justify-content:space-between; gap:1rem;
+}
+.profile-art{width:min(100%,540px); opacity:.5;}
+
+/* content blocks */
+.rows{display:grid; gap:clamp(.9rem,2vh,1.5rem);}
+.row{border-top:1px solid var(--line); padding-top:clamp(.8rem,1.6vh,1.1rem);}
+.row p{font-size:.97rem; max-width:82ch;}
+.grid2{display:grid; grid-template-columns:1fr 1fr; gap:clamp(1rem,2.5vw,2.4rem) clamp(1.5rem,4vw,3.5rem);}
+.split{display:grid; grid-template-columns:1fr 1fr; gap:clamp(1.5rem,4vw,3.5rem); align-items:start;}
+@media (max-width:820px){ .grid2, .split{grid-template-columns:1fr;} }
+
+.cards{display:grid; grid-template-columns:1fr 1fr; gap:clamp(1rem,2vw,1.6rem);}
+.cards.four{grid-template-columns:repeat(4,1fr);}
+.card{border:1px solid var(--line); padding:clamp(1rem,2vw,1.5rem);}
+.card p{font-size:.92rem;}
+.card .num{display:block; font-size:.74rem; color:#5a5a5a; margin-bottom:.7rem; letter-spacing:.1em;}
+@media (max-width:900px){ .cards.four{grid-template-columns:1fr 1fr;} }
+@media (max-width:560px){ .cards, .cards.four{grid-template-columns:1fr;} }
+
+.spec{margin:0;}
+.spec .srow{display:grid; grid-template-columns:11rem 1fr; gap:1rem; padding:.7rem 0; border-top:1px solid var(--line);}
+.spec .srow:last-child{border-bottom:1px solid var(--line);}
+.spec dt{font-family:var(--font-display), sans-serif; font-variation-settings:"wdth" 100;
+  font-size:.76rem; letter-spacing:.1em; color:var(--signal); margin:0; padding-top:.15rem;}
+.spec dd{margin:0; font-size:.98rem;}
+.spec.money .srow{grid-template-columns:1fr auto;}
+.spec.money dt{font-size:.95rem; letter-spacing:0; color:#c9c9c9; font-family:var(--font-body), sans-serif;}
+.spec.money dd{font-variant-numeric:tabular-nums;}
+.spec.money .total dt, .spec.money .total dd{color:var(--bone); font-weight:500;}
+.colh{font-size:clamp(1.1rem,1.7vw,1.45rem); margin-bottom:.8rem;}
+
+.huge{
+  font-family:var(--font-display), sans-serif; font-variation-settings:"wdth" 112;
+  font-size:clamp(3.4rem,8vw,6.4rem); line-height:1; letter-spacing:-.03em;
+  color:var(--bone); margin:0 0 1.2rem;
+}
+.stats{display:grid; grid-template-columns:repeat(3,1fr); gap:clamp(1.2rem,3vw,3rem); border-top:1px solid var(--line); padding-top:clamp(1.2rem,3vh,2rem);}
+.stats b{
+  display:block; font-family:var(--font-display), sans-serif; font-variation-settings:"wdth" 112;
+  font-weight:400; font-size:clamp(2.2rem,4.5vw,3.6rem); line-height:1; letter-spacing:-.02em;
+}
+.stats span{display:block; margin-top:.8rem; font-size:.9rem; color:var(--signal); max-width:26ch;}
+@media (max-width:700px){ .stats{grid-template-columns:1fr; gap:1.4rem;} }
+
+.stages{display:grid; grid-template-columns:repeat(3,1fr); gap:clamp(1.2rem,3vw,2.6rem);}
+.stages > div{border-top:1px solid var(--line); padding-top:1rem;}
+.stages p{font-size:.95rem;}
+@media (max-width:700px){ .stages{grid-template-columns:1fr;} }
+
+.mailto{
+  display:inline-block; margin-top:.6rem;
+  font-family:var(--font-display), sans-serif; font-variation-settings:"wdth" 112;
+  font-size:clamp(1.2rem,2.4vw,1.9rem); letter-spacing:-.01em; text-decoration:none;
+  border-bottom:1px solid var(--line); padding-bottom:.3rem; transition:border-color .3s;
+}
+.mailto:hover{border-color:var(--bone);}
